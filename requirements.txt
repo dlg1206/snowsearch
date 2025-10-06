@@ -1,0 +1,2 @@
+setuptools==80.9.0
+findpapers==0.6.7
