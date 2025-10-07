@@ -1,3 +1,6 @@
+# snowsearch
+pyyaml==6.0.3
+python-dotenv==1.1.1
 # findpapers
 setuptools==80.9.0
 findpapers==0.6.7
