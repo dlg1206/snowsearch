@@ -15,7 +15,7 @@ PROG_NAME = "snowsearch"
 DEFAULT_CONFIG_PATH = "conf.yaml"
 
 
-def _load_config(conf_file: str) -> Dict[str, str | int | List[str] | None]:
+def _load_config(conf_file: str) -> Dict[str, Dict[str, str | int | List[str] | None]]:
     """
     Load yaml config file
 
@@ -24,6 +24,7 @@ def _load_config(conf_file: str) -> Dict[str, str | int | List[str] | None]:
     """
     with open(conf_file, 'r') as file:
         return yaml.safe_load(file)
+
 
 def _create_parser() -> ArgumentParser:
     """
@@ -44,12 +45,14 @@ def _create_parser() -> ArgumentParser:
 
     return parser
 
+
 def main():
     """
     Parse initial arguments and execute commands
     """
     args = _create_parser().parse_args()
     config = _load_config(args.config)
+
 
 if __name__ == '__main__':
     load_dotenv()
