@@ -1,0 +1,60 @@
+name: "Lint PR History"
+
+on:
+  # run whenever a pr is open
+  pull_request:
+
+jobs:
+  lint-git:
+    runs-on: ubuntu-22.04
+    steps:
+      # check out full history
+      - name: Checkout PR branch and main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # fetch full history so we can compare commits
+
+      - name: Check if PR branch is rebased on latest main
+        id: rebase_check
+        run: |
+          git fetch origin main
+          BASE_COMMIT=$(git merge-base HEAD origin/main)
+          HEAD_COMMIT=$(git rev-parse origin/main)
+          
+          if [ "$BASE_COMMIT" != "$HEAD_COMMIT" ]; then
+            echo "::error title=Branch Out of Date::❌ Branch is not rebased on top of the latest main. See logs for suggested fix"
+            echo -e "To Fix:\
+          \n1. git checkout -B main origin/main\
+          \n2. git switch ${GITHUB_REF#refs/heads/}\
+          \n3. git rebase main\
+          \n4. Ensure nothing is broken\
+          \n5. git push --force-with-lease"
+            exit 1
+          fi
+          echo "✅ Branch is rebased on top of the latest main"
+
+      - name: Lint new commits for Conventional Commits
+        if: ${{ success() && steps.rebase_check.outcome == 'success' }}
+        run: |
+          # Install commitlint CLI
+          go install github.com/conventionalcommit/commitlint@latest
+          export PATH="$PATH:$(go env GOPATH)/bin"
+
+          # Get commit messages not in main
+          git log origin/main..HEAD --no-merges --pretty=format:"%s" > commit_messages.txt
+          
+          # Lint each commit message
+          echo "🔍 Linting commits against Conventional Commit format..."
+          FAIL=0
+          while IFS= read -r line; do
+            echo "$line" | commitlint lint || FAIL=1
+          done < commit_messages.txt
+          
+          if [ "$FAIL" -ne 0 ]; then
+            echo "::error title=Conventional Commit Check Failed::❌ One or more commits do not follow Conventional Commit format."
+            echo "See https://www.conventionalcommits.org/en/v1.0.0/ for formatting guide"
+            echo "Once changes have been made, run git push --force-with-lease"
+            exit 1
+          else
+            echo "✅ All commits follow Conventional Commit format."
+          fi
