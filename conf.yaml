@@ -1,24 +1,20 @@
-# Ollama agent details
-agent:
-  model:
-
 # Options for findpapers
 # https://github.com/jonatasgrosman/findpapers
 # Set FINDPAPERS_SCOPUS_API_TOKEN and FINDPAPERS_IEEE_API_TOKEN in the .env file if available
 findpapers:
   # A lower bound (inclusive) date that will be used to filter the search results.
   # Following the pattern YYYY-MM-DD. E.g. 2020-12-31
-  since:
+  # since:
 
   # An upper bound (inclusive) date that will be used to filter the search results.
   # Following the pattern YYYY-MM-DD. E.g. 2020-12-31
-  until:
+  # until:
 
   # The max number of papers to collect
   limit: 100
 
   # The max number of papers to collect per each database
-  limit_per_database:
+  # limit_per_database:
 
   # List of databases where the search should be performed, if not specified all databases will be used
   # options:
@@ -29,7 +25,7 @@ findpapers:
   # - medrxiv
   # - pubmed
   # - scopus
-  databases:
+  # databases:
 
   # List of publication types to filter when searching, if not specified all the publication types will be collected
   # options:
@@ -38,7 +34,17 @@ findpapers:
   # - proceedings
   # - book
   # - other
-  publication_types:
+  # publication_types:
 
   # Proxy URL that can be used during requests
-  proxy:
+  # Intended for institution proxies (like a campus library) to access protected docs
+  # proxy:
+
+# Ollama agent details
+# todo - different agents for nl -> fp query and abstract ranking
+agent:
+  # Model to use for parsing natural language paper search into findpapers syntax
+  # todo - tinyllama is placeholder for small model
+  model: tinyllama
+  # Specify a version of model to use, default is 'latest'
+  # version:

@@ -1,0 +1,27 @@
+# file: compose.yaml
+# description: Compose stack to launch SnowSearch Stack
+#
+# @author: Derek Garcia
+name: snowsearch
+services:
+
+  # Ollama api server for converting prompt to findpapers syntax and grading responses
+  ollama:
+    image: ollama/ollama:0.12.3
+    container_name: ollama
+    # TODO - remove public access
+    ports:
+      - "11434:11434"
+    # todo allow access to GPU if available - current just cpu only
+    networks:
+      - snowsearch-net
+    volumes:
+      - ollama_models:/root/.ollama
+
+volumes:
+  # for caching ollama models
+  ollama_models:
+
+networks:
+  snowsearch-net:
+    name: snowsearch-net
