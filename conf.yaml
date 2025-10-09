@@ -44,7 +44,6 @@ findpapers:
 # todo - different agents for nl -> fp query and abstract ranking
 agent:
   # Model to use for parsing natural language paper search into findpapers syntax
-  # todo - tinyllama is placeholder for small model
-  model: tinyllama
+  model: llama2
   # Specify a version of model to use, default is 'latest'
-  # version:
+  version: 7b

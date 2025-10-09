@@ -1,4 +1,7 @@
+from abc import ABC
+
 import requests
+from openai import OpenAI
 from requests import HTTPError
 
 """
@@ -20,7 +23,7 @@ MODEL_DOWNLOAD_ENDPOINT = "api/pull"
 MODEL_VIEW_ENDPOINT = "api/show"
 
 
-class OllamaClient:
+class OllamaClient(ABC):
 
     def __init__(self, ollama_host: str, ollama_port: int, model_name: str, model_tag: str = "latest"):
         """
@@ -34,6 +37,7 @@ class OllamaClient:
         """
         self._ollama_server = f"http://{ollama_host}:{ollama_port}"
         self._model = f"{model_name}:{model_tag if model_tag else 'latest'}"  # guard against 'None' param
+        self._client = OpenAI(base_url=f"{self._ollama_server}/v1", api_key="ollama")
 
         # err if model invalid
         self._validate_model()
