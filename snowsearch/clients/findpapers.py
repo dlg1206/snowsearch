@@ -6,7 +6,7 @@ from typing import Dict, List
 
 import findpapers
 
-from snowsearch.clients.ollama import OllamaClient
+from snowsearch.clients.model import ModelClient
 
 """
 File: findpapers.py
@@ -31,13 +31,46 @@ class PaperDTO:
 
 
 class FindpapersClient:
-    def __init__(self, config: Dict[str, str | int | List[str] | None]):
+    def __init__(self, model_client: ModelClient, config: Dict[str, str | int | List[str] | None]):
         """
         Create new findpapers client for searching for papers
 
         :param config: findpapers config details
+        :param model_client: Client to use for making openai api requests
         """
         self._config = config
+        self._model_client = model_client
+        # load content for few-shot
+        with open(NL_TO_FPQ_CONTEXT_FILE, 'r') as f:
+            self._nl_to_fpq_context = f.read()
+
+    def prompt_to_fpq(self, prompt: str) -> str:
+        """
+        Use an LLM to convert a natural language search query
+        to a findpapers style search query
+
+        :param prompt: Natural language query for papers
+        :raises ValueError: If fail to extract query from model reply
+        :return: findpapers query string
+        """
+        completion = self._model_client.prompt(
+            messages=[
+                {"role": "system", "content": self._nl_to_fpq_context},
+                {"role": "user", "content": f"\nNatural language prompt:\n{prompt.lower().strip()}"}
+            ],
+            temperature=0
+        )
+        '''
+        Attempt to extract the query from the response. 
+        This is to safeguard against wordy and descriptive replies 
+        '''
+        query_match = FPQ_JSON_RE.findall(completion.choices[0].message.content.strip())
+        print(completion.choices[0].message.content.strip())
+        if query_match:
+            return query_match[0].strip()
+        # raise error if failed to extract
+        # todo - retry logic
+        raise ValueError("Failed to extract query from response")
 
     def search(self, query: str) -> List[PaperDTO]:
         """
@@ -56,48 +89,3 @@ class FindpapersClient:
                 results = json.load(f)
         # extract relevant details
         return [PaperDTO(r['title'], r['abstract'], r['doi']) for r in results['papers']]
-
-
-class FindpapersOllamaClient(OllamaClient):
-    def __init__(self, ollama_host: str, ollama_port: int, model_name: str, model_tag: str = "latest"):
-        """
-        Create new Ollama Client for findpapers
-        Configured for 1 client 1 model
-
-        :param ollama_host: Host of ollama server
-        :param ollama_port: Host of ollama port
-        :param model_name: Name of model to use
-        :param model_tag: Optional model tag (default: latest)
-        """
-        super().__init__(ollama_host, ollama_port, model_name, model_tag)
-        # load content for few-shot
-        with open(NL_TO_FPQ_CONTEXT_FILE, 'r') as f:
-            self._nl_to_fpq_context = f.read()
-
-    def prompt_to_fpq(self, prompt: str) -> str:
-        """
-        Use an LLM to convert a natural language search query
-        to a findpapers style search query
-
-        :param prompt: Natural language query for papers
-        :raises ValueError: If fail to extract query from model reply
-        :return: findpapers query string
-        """
-        completion = self._client.chat.completions.create(
-            model=self._model,
-            messages=[
-                {"role": "system", "content": self._nl_to_fpq_context},
-                {"role": "user", "content": f"\nNatural language prompt:\n{prompt.lower().strip()}"}
-            ],
-            temperature=0
-        )
-        '''
-        Attempt to extract the query from the response. 
-        This is to safeguard against wordy and descriptive replies 
-        '''
-        query_match = FPQ_JSON_RE.findall(completion.choices[0].message.content.strip())
-        if query_match:
-            return query_match[0].strip()
-        # raise error if failed to extract
-        # todo - retry logic
-        raise ValueError("Failed to extract query from response")

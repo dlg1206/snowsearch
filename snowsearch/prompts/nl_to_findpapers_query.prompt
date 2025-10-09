@@ -90,6 +90,6 @@ term a OR [term b]                              | No (missing square brackets)
 📌 Important Guidelines:
 ========================
 - The final findpapers query must follow all rules described above.
-- Only return valid JSON
+- Only return valid JSON.
 - Do not add any extra explanation or text outside the JSON.
 - Do not hallucinate.

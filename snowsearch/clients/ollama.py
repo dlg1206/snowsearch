@@ -1,8 +1,9 @@
 from abc import ABC
 
 import requests
-from openai import OpenAI
 from requests import HTTPError
+
+from snowsearch.clients.model import ModelClient
 
 """
 File: ollama.py
@@ -23,22 +24,23 @@ MODEL_DOWNLOAD_ENDPOINT = "api/pull"
 MODEL_VIEW_ENDPOINT = "api/show"
 
 
-class OllamaClient(ABC):
+class OllamaClient(ModelClient):
 
     def __init__(self, ollama_host: str, ollama_port: int, model_name: str, model_tag: str = "latest"):
         """
         Create new Ollama Client
         Configured for 1 client 1 model
-
         :param ollama_host: Host of ollama server
         :param ollama_port: Host of ollama port
         :param model_name: Name of model to use
         :param model_tag: Optional model tag (default: latest)
         """
+        super().__init__(
+            model=f"{model_name}:{model_tag if model_tag else 'latest'}",
+            api_key="ollama",
+            base_url=f"http://{ollama_host}:{ollama_port}/v1"
+        )
         self._ollama_server = f"http://{ollama_host}:{ollama_port}"
-        self._model = f"{model_name}:{model_tag if model_tag else 'latest'}"  # guard against 'None' param
-        self._client = OpenAI(base_url=f"{self._ollama_server}/v1", api_key="ollama")
-
         # err if model invalid
         self._validate_model()
 
