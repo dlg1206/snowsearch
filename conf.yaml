@@ -46,4 +46,4 @@ agent:
   # Model to use for parsing natural language paper search into findpapers syntax
   model: llama2
   # Specify a version of model to use, default is 'latest'
-  version: 7b
+  version: 7b-text-q4_K_M

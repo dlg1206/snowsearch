@@ -1,4 +1,5 @@
 import json
+import re
 from dataclasses import dataclass
 from tempfile import NamedTemporaryFile
 from typing import Dict, List
@@ -16,6 +17,7 @@ Description: Client for interacting with findpapers api
 """
 
 NL_TO_FPQ_CONTEXT_FILE = "snowsearch/prompts/nl_to_findpapers_query.prompt"
+FPQ_JSON_RE = re.compile(r'\{\n.*"query": "(.*?)"')
 
 
 @dataclass
@@ -78,6 +80,7 @@ class FindpapersOllamaClient(OllamaClient):
         to a findpapers style search query
 
         :param prompt: Natural language query for papers
+        :raises ValueError: If fail to extract query from model reply
         :return: findpapers query string
         """
         completion = self._client.chat.completions.create(
@@ -86,7 +89,15 @@ class FindpapersOllamaClient(OllamaClient):
                 {"role": "system", "content": self._nl_to_fpq_context},
                 {"role": "user", "content": f"\nNatural language prompt:\n{prompt.lower().strip()}"}
             ],
-            temperature=0,
+            temperature=0
         )
-
-        return completion.choices[0].message.content
+        '''
+        Attempt to extract the query from the response. 
+        This is to safeguard against wordy and descriptive replies 
+        '''
+        query_match = FPQ_JSON_RE.findall(completion.choices[0].message.content.strip())
+        if query_match:
+            return query_match[0].strip()
+        # raise error if failed to extract
+        # todo - retry logic
+        raise ValueError("Failed to extract query from response")
