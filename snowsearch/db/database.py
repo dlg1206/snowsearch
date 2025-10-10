@@ -1,12 +1,13 @@
 import os
 import time
+from abc import ABC
 
 from neo4j import GraphDatabase
 from neo4j.exceptions import ConstraintError, TransientError
-from taps_shared.logger import logger
 
 from db import _NODE_SCHEMA
 from db.entity import Node, Relationship
+from util.logger import logger
 
 """
 File: database.py
@@ -22,7 +23,7 @@ DEFAULT_BOLT_PORT = "7687"
 MAX_ATTEMPTS = 3  # attempt to insert 3 times in case of deadlock
 
 
-class Neo4jDatabase:
+class Neo4jDatabase(ABC):
     """
     Generic interface for accessing a Neo4j Database
     """
@@ -61,9 +62,11 @@ class Neo4jDatabase:
 
         :return: Neo4jDatabase with open connection
         """
+        username, password = os.getenv('NEO4J_AUTH').split('/', 1)
         self._driver = GraphDatabase.driver(
             self._uri,
-            auth=(os.getenv('NEO4J_AUTH')))
+            auth=(username, password)
+        )
         self._verify_connection()
 
         return self
@@ -80,17 +83,17 @@ class Neo4jDatabase:
             self._driver.close()
             self._driver = None
 
-    def load_constraints(self) -> None:
+    def init(self) -> None:
         """
         Load constraints from the schema yaml file
         """
-        logger.info("Initializing database")
+        logger.debug_msg("Initializing database")
         with self._driver.session() as session:
             # enforce for unique keys
             for node_label in _NODE_SCHEMA.keys():
                 # Create the constraint query dynamically
                 session.run(f"CREATE CONSTRAINT IF NOT EXISTS FOR (n:{node_label}) REQUIRE n.match_id IS UNIQUE;")
-        logger.info("Database initialized")
+        logger.debug_msg("Database initialized")
 
     def insert_node(self, node: Node, upsert: bool = False) -> bool:
         """

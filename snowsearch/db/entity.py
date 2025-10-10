@@ -14,7 +14,7 @@ Description: Node construction and generation from yaml schema
 
 
 class NodeType(Enum):
-    # todo nodes
+    PAPER = "Paper"
 
     def get_relations_to(self, other_node_type: "NodeType") -> List["RelationshipType"]:
         """
@@ -34,8 +34,8 @@ class NodeType(Enum):
 
 
 class RelationshipType(Enum):
-    # todo relationships
-    pass
+    ADDED_BY = "ADDED_BY"
+    REFERENCES = "REFERENCES"
 
 
 class MissingEntityError(ValueError):

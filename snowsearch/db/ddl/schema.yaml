@@ -1,0 +1,21 @@
+nodes:
+  Paper:
+    required_properties:
+      - "id"
+    properties:
+      - "title"
+      - "abstract_text"
+      - "abstract_embedding"
+      - "is_open_access"
+      - "download_url"
+      - "processed"
+      - "time_added"
+    relationships:
+      ADDED_BY:
+        - "Paper"
+      REFERENCES:
+        - "Paper"
+
+relationships:
+  ADDED_BY:
+  REFERENCES:
