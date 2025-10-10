@@ -7,7 +7,7 @@ from typing import Dict, List
 
 import findpapers
 
-from client.model import ModelClient
+from client.ai.model import ModelClient
 from db.paper_database import PaperDatabase
 from util.logger import logger
 from util.timer import Timer
