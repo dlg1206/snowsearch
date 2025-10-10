@@ -1,8 +1,11 @@
 from abc import ABC
-from typing import Any
+from typing import Any, Tuple
 
 from openai import OpenAI
 from openai.types.chat import ChatCompletion
+
+from util.logger import logger
+from util.timer import Timer
 
 """
 File: model.py
@@ -32,11 +35,19 @@ class ModelClient(ABC):
         # create client
         self._model_client = OpenAI(**params)
 
-    def prompt(self, **prompt_kwargs: Any) -> ChatCompletion:
+    def prompt(self, **prompt_kwargs: Any) -> Tuple[ChatCompletion, Timer]:
         """
-        Prompt a gpt model
+        Prompt a model
 
         :param prompt_kwargs: OpenAI kwargs for chat
-        :return: Completed chat object
+        :return: Completed chat object and timer
         """
-        return self._model_client.chat.completions.create(model=self._model, **prompt_kwargs)
+        logger.debug_msg(f"Prompting '{self._model}'")
+        timer = Timer()
+        completion = self._model_client.chat.completions.create(model=self._model, **prompt_kwargs)
+        logger.debug_msg(f"Response from '{self._model}' generated in {timer.format_time()}s")
+        return completion, timer
+
+    @property
+    def model(self) -> str:
+        return self._model

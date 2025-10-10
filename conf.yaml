@@ -11,7 +11,7 @@ findpapers:
   # until:
 
   # The max number of papers to collect
-  limit: 100
+  limit: 10
 
   # The max number of papers to collect per each database
   # limit_per_database:

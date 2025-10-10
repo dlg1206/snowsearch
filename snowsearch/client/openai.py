@@ -1,6 +1,9 @@
 import os
 
-from snowsearch.clients.model import ModelClient
+from openai import AuthenticationError
+
+from client.model import ModelClient
+from util.logger import logger
 
 """
 File: openai.py
@@ -11,6 +14,14 @@ Description: Base client for interacting with OpenAI API like GPT
 """
 
 
+class InvalidAPIKeyError(Exception):
+    def __init__(self):
+        """
+        Failed to validate OpenAI API key
+        """
+        super().__init__("Failed to validate OpenAI API key")
+
+
 class OpenAIClient(ModelClient):
 
     def __init__(self, model_name: str):
@@ -19,7 +30,9 @@ class OpenAIClient(ModelClient):
         Configured for 1 client 1 model
 
         :param model_name: Name of model to use
+        :raises EnvironmentError: If the 'OPENAI_API_KEY' env var is not defined
         """
+        logger.debug_msg("Using openai client")
         # ensure openapi key is present
         if not os.getenv('OPENAI_API_KEY'):
             raise EnvironmentError("Missing API key in environment variable: OPENAI_API_KEY")
@@ -31,6 +44,10 @@ class OpenAIClient(ModelClient):
     def _verify_api_key(self) -> None:
         """
         Verify OpenAI key is valid and has access to the requested model
-        :raises Exception: If failed to verify key and model
+
+        :raises InvalidAPIKey: If failed to verify key and model
         """
-        self._model_client.models.retrieve(self._model)
+        try:
+            self._model_client.models.retrieve(self._model)
+        except AuthenticationError as e:
+            raise InvalidAPIKeyError() from e
