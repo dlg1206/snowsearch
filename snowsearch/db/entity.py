@@ -14,7 +14,9 @@ Description: Node construction and generation from yaml schema
 
 
 class NodeType(Enum):
+    DB_METADATA = "DB_Metadata"
     PAPER = "Paper"
+    RUN = "Run"
 
     def get_relations_to(self, other_node_type: "NodeType") -> List["RelationshipType"]:
         """
@@ -34,7 +36,7 @@ class NodeType(Enum):
 
 
 class RelationshipType(Enum):
-    ADDED_BY = "ADDED_BY"
+    ADDED = "ADDED"
     REFERENCES = "REFERENCES"
 
 

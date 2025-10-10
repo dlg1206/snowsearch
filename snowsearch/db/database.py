@@ -1,3 +1,4 @@
+import logging
 import os
 import time
 from abc import ABC
@@ -6,7 +7,7 @@ from neo4j import GraphDatabase
 from neo4j.exceptions import ConstraintError, TransientError
 
 from db import _NODE_SCHEMA
-from db.entity import Node, Relationship
+from db.entity import Node, Relationship, NodeType
 from util.logger import logger
 
 """
@@ -15,6 +16,11 @@ Description: neo4j database interface for handling threat actor data
 
 @author Derek Garcia
 """
+
+# Mute Neo4j driver logs
+logging.getLogger("neo4j").setLevel(logging.CRITICAL)
+logging.getLogger("neo4j.backend").setLevel(logging.CRITICAL)
+
 DDL_PATH = f"{os.path.dirname(__file__)}/ddl/schema.yaml"
 DEFAULT_USER = "neo4j"
 DEFAULT_BOLT_URI = "bolt://localhost"
@@ -94,6 +100,25 @@ class Neo4jDatabase(ABC):
                 # Create the constraint query dynamically
                 session.run(f"CREATE CONSTRAINT IF NOT EXISTS FOR (n:{node_label}) REQUIRE n.match_id IS UNIQUE;")
         logger.debug_msg("Database initialized")
+
+    def has(self, node_type: NodeType, node_id: str) -> bool:
+        """
+        Check if the given node id exists in the database
+
+        :param node_type: Node type to search for
+        :param node_id: id to search for
+        :raises RuntimeError: If attempt to insert using a closed connection
+        :return: True if node exists, False otherwise
+        """
+        # ensure open connection
+        if not self._driver:
+            raise RuntimeError("Database driver is not initialized")
+        # build query
+        query = f"MATCH (n:{node_type.value}) WHERE n.id = $node_id RETURN count(n) > 0 AS exists"
+        # exe and return results
+        with self._driver.session() as session:
+            result = session.run(query, node_id=node_id)
+            return result.single()["exists"]
 
     def insert_node(self, node: Node, upsert: bool = False) -> bool:
         """
