@@ -1,0 +1,42 @@
+nodes:
+  # dummy node to check if db needs to be initialized
+  DB_Metadata:
+    properties:
+      - "initialized"
+
+  # A metadata object for a full search run details
+  Run:
+    required_properties:
+      - "id"
+    properties:
+      - "start"
+      - "end"
+      - "findpapers_model"
+      - "findpapers_prompt"
+      - "findpapers_query"
+    relationships:
+      # This run added this paper
+      ADDED:
+        - "Paper"
+
+  # A metadata object for a paper
+  Paper:
+    required_properties:
+      - "id"
+    properties:
+      - "abstract_text"
+      - "abstract_embedding"
+      - "is_open_access"
+      - "download_url"
+      - "processed"
+      - "time_added"
+    relationships:
+      # This paper added this paper (during snowballing)
+      ADDED:
+        - "Paper"
+      REFERENCES:
+        - "Paper"
+
+relationships:
+  ADDED:
+  REFERENCES:

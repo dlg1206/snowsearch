@@ -18,7 +18,31 @@ services:
     volumes:
       - ollama_models:/root/.ollama
 
+  # Neo4j Database for storing paper abstracts and metadata
+  abstract_db:
+    image: neo4j:5.26.13
+    container_name: abstract_db
+    env_file:
+      - path: .env
+        required: true
+    # default values
+    # TODO - remove public access
+    ports:
+      - "7474:7474"  # Neo4j Browser
+      - "7687:7687"  # Bolt protocol
+    environment:
+      NEO4J_AUTH: ${NEO4J_AUTH:?Neo4j 'user/pw' must be set in the .env file}
+    networks:
+      - snowsearch-net
+    volumes:
+      - abstract_db:/data
+      # temp volume for logs
+      - type: tmpfs
+        target: /logs
+
 volumes:
+  # for caching abstracts
+  abstract_db:
   # for caching ollama models
   ollama_models:
 

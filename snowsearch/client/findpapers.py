@@ -8,6 +8,7 @@ from typing import Dict, List
 import findpapers
 
 from client.model import ModelClient
+from db.paper_database import PaperDatabase
 from util.logger import logger
 from util.timer import Timer
 
@@ -46,26 +47,30 @@ class ExceedMaxQueryGenerationAttemptsError(Exception):
 
 
 class FindpapersClient:
-    def __init__(self, model_client: ModelClient, config: Dict[str, str | int | List[str] | None]):
+    def __init__(self, run_id: int, paper_db: PaperDatabase, model_client: ModelClient,
+                 config: Dict[str, str | int | List[str] | None]):
         """
         Create new findpapers client for searching for papers
 
+        :param run_id: ID of current run
+        :param paper_db: Database to store paper metadata in
         :param config: findpapers config details
         :param model_client: Client to use for making openai api requests
         """
-        self._config = config
+        self._run_id = run_id
+        self._paper_db = paper_db
         self._model_client = model_client
+        self._config = config
         # load content for few-shot
         with open(NL_TO_FPQ_CONTEXT_FILE, 'r') as f:
             self._nl_to_fpq_context = f.read()
 
-    def prompt_to_fpq(self, prompt: str, attempt: int = 0) -> str:
+    def prompt_to_fpq(self, prompt: str) -> str:
         """
         Use an LLM to convert a natural language search query
         to a findpapers style search query
 
         :param prompt: Natural language query for papers
-        :param attempt: Attempt count to generate the query
         :raises ExceedMaxQueryGenerationAttemptsError: If fail to extract query from model reply
         :return: findpapers query string
         """
@@ -75,7 +80,7 @@ class FindpapersClient:
             completion, timer = self._model_client.prompt(
                 messages=[
                     {"role": "system", "content": self._nl_to_fpq_context},
-                    {"role": "user", "content": f"\nNatural language prompt:\n{prompt.lower().strip()}"}
+                    {"role": "user", "content": f"\nNatural language prompt:\n{prompt.strip()}"}
                 ],
                 temperature=0
             )
@@ -85,11 +90,16 @@ class FindpapersClient:
             '''
             query_match = FPQ_JSON_RE.findall(completion.choices[0].message.content.strip())
             if query_match:
+                query = query_match[0].strip()
+                # report success
                 logger.info(f"Generated findpapers query in {timer.format_time()}s")
-                logger.debug_msg(f"Generated query: {query_match[0].strip()}")
-                return query_match[0].strip()
+                logger.debug_msg(f"Generated query: {query}")
+                # save to db
+                self._paper_db.insert_findpapers_query(self._run_id, self._model_client.model, prompt.strip(), query)
+                return query
             # else retry
-            logger.warn("Failed to generate findpapers query, retrying. . .")
+            if attempt + 1 < MAX_RETRIES:
+                logger.warn("Failed to generate findpapers query, retrying. . .")
         # error if exceed retries
         raise ExceedMaxQueryGenerationAttemptsError(self._model_client.model)
 
