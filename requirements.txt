@@ -1,6 +1,7 @@
 # snowsearch
 pyyaml==6.0.3
 python-dotenv==1.1.1
+aiohttp==3.13.0
 requests==2.32.5
 openai==2.3.0
 tqdm==4.67.1

@@ -1,11 +1,14 @@
+import os
 import warnings
 from datetime import datetime
+from typing import Dict
 
 from sentence_transformers import SentenceTransformer
 
 from db.database import Neo4jDatabase
 from db.entity import Node, NodeType, RelationshipType
 from util.logger import logger
+from util.timer import Timer
 
 """
 File: paper_database.py
@@ -18,17 +21,24 @@ Description: Specialized interface for abstracting Neo4j commands to the databas
 # embedding model details
 DEFAULT_EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 DEFAULT_DIMENSIONS = 384
+SENTENCE_TRANSFORMER_CACHE = ".cache/huggingface/hub"
+
+DOI_PREFIX = "https://doi.org/"
 
 # suppress cuda warnings
 warnings.filterwarnings("ignore", message=".*CUDA initialization.*")
 
 
 class PaperDatabase(Neo4jDatabase):
-    def __init__(self):
+    def __init__(self, embedding_model: str = DEFAULT_EMBEDDING_MODEL, model_dimensions: int = DEFAULT_DIMENSIONS):
         """
         Create new instance of the interface
+
+        :param embedding_model: Optional embedding model to use (Default: all-MiniLM-L6-v2)
+        :param model_dimensions: Optional dimensions of embedding model. Must match the provided embedding model (Default: 384)
         """
         super().__init__()
+        self._model_dimensions = model_dimensions
         # todo - add option in config?
         # use gpu if cuda available
         from torch.cuda import is_available
@@ -38,7 +48,17 @@ class PaperDatabase(Neo4jDatabase):
         else:
             device = "cpu"
             logger.warn("Using cpu to create abstract embeddings -- this may impact performance")
-        self._embedding_model = SentenceTransformer(DEFAULT_EMBEDDING_MODEL, device=device)
+
+        # download embedding model if needed
+        model_downloaded = _is_model_local(embedding_model)
+        timer = None
+        if not model_downloaded:
+            logger.warn(f"Embedding model '{embedding_model}' not downloaded locally, downloading now")
+            timer = Timer()
+
+        self._embedding_model = SentenceTransformer(embedding_model, device=device)
+        if timer:
+            logger.info(f"Downloaded '{embedding_model}' in {timer.format_time()}s")
 
     def init(self) -> None:
         """
@@ -58,7 +78,7 @@ class PaperDatabase(Neo4jDatabase):
         FOR (p:{NodeType.PAPER.value}) ON (p.abstract_embedding)
         OPTIONS {{
           indexConfig: {{
-            `vector.dimensions`: {DEFAULT_DIMENSIONS},
+            `vector.dimensions`: {self._model_dimensions},
             `vector.similarity_function`: 'cosine'
           }}
         }}
@@ -101,7 +121,7 @@ class PaperDatabase(Neo4jDatabase):
         })
         self.insert_node(run_node, True)
 
-    def insert_paper(self, run_id: int, title: str, abstract: str) -> None:
+    def insert_new_paper(self, run_id: int, title: str, abstract: str) -> None:
         """
         Insert a paper into the database
 
@@ -109,7 +129,6 @@ class PaperDatabase(Neo4jDatabase):
         :param title: Title of paper
         :param abstract: Abstract of paper
         """
-        # todo other fields
         # add paper
         abstract_embedding = self._embedding_model.encode(abstract, show_progress_bar=False).tolist()
         paper_node = Node.create(NodeType.PAPER, {
@@ -119,10 +138,50 @@ class PaperDatabase(Neo4jDatabase):
             'processed': False,
             'time_added': datetime.now()
         })
-        self.insert_node(paper_node, True)
+        self.insert_node(paper_node)
 
         # add relationship to current run
         run_node = Node.create(NodeType.RUN, {'id': run_id})
         self.insert_relationship(run_node,
                                  run_node.create_relationship_to(paper_node.type, RelationshipType.ADDED),
                                  paper_node)
+
+    def update_paper(self,
+                     title: str,
+                     doi: str = None,
+                     is_open_access: bool = None,
+                     pdf_url: str = None,
+                     processed: bool = None) -> None:
+        """
+        Update paper fields. Only provided fields will be updated
+
+        :param title: Title of paper
+        :param doi: DOI of paper
+        :param is_open_access: Is the paper open access?
+        :param pdf_url: URL of downloadable PDF
+        :param processed: Has this paper been processed by grobid
+        """
+        # set properties
+        properties: Dict[str, str | bool] = {'id': title}
+        if doi:
+            properties['doi'] = doi.removeprefix(DOI_PREFIX)
+        if is_open_access is not None:
+            properties['is_open_access'] = is_open_access
+        if pdf_url:
+            properties['pdf_url'] = pdf_url
+        if processed is not None:
+            properties['processed'] = processed
+        # update node
+        self.insert_node(Node.create(NodeType.PAPER, properties), True)
+
+
+def _is_model_local(embedding_model: str) -> bool:
+    """
+    Util method to check if the embedding model is downloaded locally
+
+    :param embedding_model: Name of sentence transformer embedding model to use
+    :return: True if downloaded, false otherwise
+    """
+    cache_dir = os.path.expanduser(f"~/{SENTENCE_TRANSFORMER_CACHE}")
+    model_path = os.path.join(cache_dir, f"models--sentence-transformers--{embedding_model}")
+    return os.path.exists(model_path)

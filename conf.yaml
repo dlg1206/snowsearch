@@ -1,3 +1,26 @@
+# Options for configuring LLM agents
+# todo - different agents for nl -> fp query and abstract ranking
+agent:
+  # Host of an ollama server, will default to 'localhost'
+  # Useful if ollama server is not running locally, ie running on a remote host with more resources available
+  # Superseded by the OLLAMA_HOST env variable
+  # Ignored if the OPENAI_API_KEY env variable is set, in which case the OpenAI API is used
+  # ollama_host:
+
+  # Port of an ollama server, will default to '11434'
+  # Useful if ollama server is not running locally, ie running on a remote host with more resources available
+  # Superseded by the OLLAMA_PORT env variable
+  # Ignored if the OPENAI_API_KEY env variable is set, in which case the OpenAI API is used
+  # ollama_port:
+
+  # Model to use for parsing natural language paper search into findpapers syntax
+  # If using ollama (default), search for desired models here: https://ollama.com/search
+  # If using OpenAI, search for desired models here: https://platform.openai.com/docs/models
+  model: llama3
+
+  # If using ollama, specify a tag model to use, will default to 'latest'
+  tag: 8b
+
 # Options for findpapers
 # https://github.com/jonatasgrosman/findpapers
 # Set FINDPAPERS_SCOPUS_API_TOKEN and FINDPAPERS_IEEE_API_TOKEN in the .env file if available
@@ -40,25 +63,9 @@ findpapers:
   # Intended for institution proxies (like a campus library) to access protected docs
   # proxy:
 
-# Options for configuring LLM agents
-# todo - different agents for nl -> fp query and abstract ranking
-agent:
-  # Host of an ollama server, will default to 'localhost'
-  # Useful if ollama server is not running locally, ie running on a remote host with more resources available
-  # Superseded by the OLLAMA_HOST env variable
-  # Ignored if the OPENAI_API_KEY env variable is set, in which case the OpenAI API is used
-  # ollama_host:
-
-  # Port of an ollama server, will default to '11434'
-  # Useful if ollama server is not running locally, ie running on a remote host with more resources available
-  # Superseded by the OLLAMA_PORT env variable
-  # Ignored if the OPENAI_API_KEY env variable is set, in which case the OpenAI API is used
-  # ollama_port:
-
-  # Model to use for parsing natural language paper search into findpapers syntax
-  # If using ollama (default), search for desired models here: https://ollama.com/search
-  # If using OpenAI, search for desired models here: https://platform.openai.com/docs/models
-  model: llama3
-
-  # If using ollama, specify a tag model to use, will default to 'latest'
-  tag: 8b
+# Config for OpenAlex API
+# https://docs.openalex.org/
+openalex:
+  # Optional email to use for 'polite pool' for better access
+  # https://docs.openalex.org/how-to-use-the-api/rate-limits-and-authentication#the-polite-pool
+  # email:

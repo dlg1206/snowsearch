@@ -117,6 +117,7 @@ class FindpapersClient:
             with open(fp_tmp.name, 'r') as f:
                 results = json.load(f)
         # extract relevant details
+        # todo - save paper details like doi and url to db
         return [PaperDTO(r['title'], r['abstract'], r['doi']) for r in results['papers']]
 
     @property

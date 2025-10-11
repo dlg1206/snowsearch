@@ -24,10 +24,11 @@ nodes:
     required_properties:
       - "id"
     properties:
+      - "doi"
       - "abstract_text"
       - "abstract_embedding"
       - "is_open_access"
-      - "download_url"
+      - "pdf_url"
       - "processed"
       - "time_added"
     relationships:
