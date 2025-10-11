@@ -8,7 +8,6 @@ from typing import Dict, List
 import findpapers
 
 from client.ai.model import ModelClient
-from db.paper_database import PaperDatabase
 from util.logger import logger
 from util.timer import Timer
 
@@ -47,18 +46,14 @@ class ExceedMaxQueryGenerationAttemptsError(Exception):
 
 
 class FindpapersClient:
-    def __init__(self, run_id: int, paper_db: PaperDatabase, model_client: ModelClient,
+    def __init__(self, model_client: ModelClient,
                  config: Dict[str, str | int | List[str] | None]):
         """
         Create new findpapers client for searching for papers
 
-        :param run_id: ID of current run
-        :param paper_db: Database to store paper metadata in
         :param config: findpapers config details
         :param model_client: Client to use for making openai api requests
         """
-        self._run_id = run_id
-        self._paper_db = paper_db
         self._model_client = model_client
         self._config = config
         # load content for few-shot
@@ -94,8 +89,6 @@ class FindpapersClient:
                 # report success
                 logger.info(f"Generated findpapers query in {timer.format_time()}s")
                 logger.debug_msg(f"Generated query: {query}")
-                # save to db
-                self._paper_db.insert_findpapers_query(self._run_id, self._model_client.model, prompt.strip(), query)
                 return query
             # else retry
             if attempt + 1 < MAX_RETRIES:
@@ -125,3 +118,7 @@ class FindpapersClient:
                 results = json.load(f)
         # extract relevant details
         return [PaperDTO(r['title'], r['abstract'], r['doi']) for r in results['papers']]
+
+    @property
+    def model(self) -> str:
+        return self._model_client.model
