@@ -7,8 +7,7 @@ from typing import Dict, List
 
 import findpapers
 
-from client.model import ModelClient
-from db.paper_database import PaperDatabase
+from client.ai.model import ModelClient
 from util.logger import logger
 from util.timer import Timer
 
@@ -46,19 +45,16 @@ class ExceedMaxQueryGenerationAttemptsError(Exception):
         return self._model
 
 
+# DEPRECATED Deprecated in favor of using OpenAlex directly, may reintegrate later
 class FindpapersClient:
-    def __init__(self, run_id: int, paper_db: PaperDatabase, model_client: ModelClient,
+    def __init__(self, model_client: ModelClient,
                  config: Dict[str, str | int | List[str] | None]):
         """
         Create new findpapers client for searching for papers
 
-        :param run_id: ID of current run
-        :param paper_db: Database to store paper metadata in
         :param config: findpapers config details
         :param model_client: Client to use for making openai api requests
         """
-        self._run_id = run_id
-        self._paper_db = paper_db
         self._model_client = model_client
         self._config = config
         # load content for few-shot
@@ -90,12 +86,10 @@ class FindpapersClient:
             '''
             query_match = FPQ_JSON_RE.findall(completion.choices[0].message.content.strip())
             if query_match:
-                query = query_match[0].strip()
+                query = query_match[0].strip().replace("'", '"')  # replace double quotes
                 # report success
                 logger.info(f"Generated findpapers query in {timer.format_time()}s")
                 logger.debug_msg(f"Generated query: {query}")
-                # save to db
-                self._paper_db.insert_findpapers_query(self._run_id, self._model_client.model, prompt.strip(), query)
                 return query
             # else retry
             if attempt + 1 < MAX_RETRIES:
@@ -112,11 +106,12 @@ class FindpapersClient:
         :param query: findpapers style query to search for papers from
         :return: List of relevant papers
         """
-        with NamedTemporaryFile(prefix="findpapers", suffix=".json") as fp_tmp:
+        with NamedTemporaryFile(prefix="findpapers-", suffix=".json") as fp_tmp:
             logger.info("Starting findpapers search, this may take a while")
             sys.stdout.flush()  # print msg before stderr
             timer = Timer()
-            # todo - supress output?
+            # todo - suppress output?
+            # todo wrap in try catch in case query fails
             findpapers.search(fp_tmp.name, query, **self._config)
             sys.stderr.flush()  # flush all findpapers log messages first
             logger.info(f"Completed seed search in {timer.format_time()}s")
@@ -124,4 +119,9 @@ class FindpapersClient:
             with open(fp_tmp.name, 'r') as f:
                 results = json.load(f)
         # extract relevant details
+        # todo - save paper details like doi and url to db
         return [PaperDTO(r['title'], r['abstract'], r['doi']) for r in results['papers']]
+
+    @property
+    def model(self) -> str:
+        return self._model_client.model

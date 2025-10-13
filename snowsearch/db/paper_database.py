@@ -1,11 +1,14 @@
+import os
 import warnings
 from datetime import datetime
+from typing import Dict, List
 
 from sentence_transformers import SentenceTransformer
 
 from db.database import Neo4jDatabase
 from db.entity import Node, NodeType, RelationshipType
 from util.logger import logger
+from util.timer import Timer
 
 """
 File: paper_database.py
@@ -18,17 +21,24 @@ Description: Specialized interface for abstracting Neo4j commands to the databas
 # embedding model details
 DEFAULT_EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 DEFAULT_DIMENSIONS = 384
+SENTENCE_TRANSFORMER_CACHE = ".cache/huggingface/hub"
+
+DOI_PREFIX = "https://doi.org/"
 
 # suppress cuda warnings
 warnings.filterwarnings("ignore", message=".*CUDA initialization.*")
 
 
 class PaperDatabase(Neo4jDatabase):
-    def __init__(self):
+    def __init__(self, embedding_model: str = DEFAULT_EMBEDDING_MODEL, model_dimensions: int = DEFAULT_DIMENSIONS):
         """
         Create new instance of the interface
+
+        :param embedding_model: Optional embedding model to use (Default: all-MiniLM-L6-v2)
+        :param model_dimensions: Optional dimensions of embedding model. Must match the provided embedding model (Default: 384)
         """
         super().__init__()
+        self._model_dimensions = model_dimensions
         # todo - add option in config?
         # use gpu if cuda available
         from torch.cuda import is_available
@@ -38,7 +48,17 @@ class PaperDatabase(Neo4jDatabase):
         else:
             device = "cpu"
             logger.warn("Using cpu to create abstract embeddings -- this may impact performance")
-        self._embedding_model = SentenceTransformer(DEFAULT_EMBEDDING_MODEL, device=device)
+
+        # download embedding model if needed
+        model_downloaded = _is_model_local(embedding_model)
+        timer = None
+        if not model_downloaded:
+            logger.warn(f"Embedding model '{embedding_model}' not downloaded locally, downloading now")
+            timer = Timer()
+
+        self._embedding_model = SentenceTransformer(embedding_model, device=device)
+        if timer:
+            logger.info(f"Downloaded '{embedding_model}' in {timer.format_time()}s")
 
     def init(self) -> None:
         """
@@ -58,7 +78,7 @@ class PaperDatabase(Neo4jDatabase):
         FOR (p:{NodeType.PAPER.value}) ON (p.abstract_embedding)
         OPTIONS {{
           indexConfig: {{
-            `vector.dimensions`: {DEFAULT_DIMENSIONS},
+            `vector.dimensions`: {self._model_dimensions},
             `vector.similarity_function`: 'cosine'
           }}
         }}
@@ -84,45 +104,119 @@ class PaperDatabase(Neo4jDatabase):
         self.insert_node(run_node)
         return new_run_id
 
-    def insert_findpapers_query(self, run_id: int, model: str, prompt: str, query: str) -> None:
+    def insert_openalex_query(self, run_id: int, model: str, prompt: str, query: str) -> None:
         """
-        Update a run with the findpapers prompt and resulting query
+        Update a run with the openalex prompt and resulting query
+
+        todo add additional OpenAlex filters used
+        https://docs.openalex.org/api-entities/works/filter-works#works-attribute-filters
 
         :param run_id: ID of run
-        :param model: Model used to generate findpapers query
+        :param model: Model used to generate OpenAlex query
         :param prompt: Original natural language prompt
-        :param query: Resulting findpapers query
+        :param query: Resulting OpenAlex query
         """
         run_node = Node.create(NodeType.RUN, {
             'id': run_id,
-            'findpapers_model': model,
-            'findpapers_prompt': prompt,
-            'findpapers_query': query
+            'openalex_model': model,
+            'openalex_prompt': prompt,
+            'openalex_query': query
         })
         self.insert_node(run_node, True)
 
-    def insert_paper(self, run_id: int, title: str, abstract: str) -> None:
+    def insert_new_paper(self, run_id: int, title: str) -> None:
         """
         Insert a paper into the database
 
         :param run_id: ID of run paper found
         :param title: Title of paper
-        :param abstract: Abstract of paper
         """
-        # todo other fields
-        # add paper
-        abstract_embedding = self._embedding_model.encode(abstract, show_progress_bar=False).tolist()
+        # # add paper
+        # abstract_embedding = self._embedding_model.encode(abstract, show_progress_bar=False).tolist()
         paper_node = Node.create(NodeType.PAPER, {
             'id': title,
-            'abstract_text': abstract,
-            'abstract_embedding': abstract_embedding,
-            'processed': False,
             'time_added': datetime.now()
         })
-        self.insert_node(paper_node, True)
+        self.insert_node(paper_node)
 
         # add relationship to current run
         run_node = Node.create(NodeType.RUN, {'id': run_id})
         self.insert_relationship(run_node,
                                  run_node.create_relationship_to(paper_node.type, RelationshipType.ADDED),
                                  paper_node)
+
+    def update_paper(self,
+                     title: str,
+                     open_alex_id: str = None,
+                     doi: str = None,
+                     is_open_access: bool = None,
+                     pdf_url: str = None) -> None:
+        """
+        Update paper fields. Only provided fields will be updated
+
+        :param title: Title of paper
+        :param open_alex_id: OpenAlex work ID
+        :param doi: DOI of paper
+        :param is_open_access: Is the paper open access?
+        :param pdf_url: URL of downloadable PDF
+        """
+        # set properties
+        properties: Dict[str, str | bool | datetime] = {'id': title}
+        # if open_alex_id:
+        #     properties['openalex_id'] = open_alex_id.removeprefix(OPENALEX_PREFIX)
+        if doi:
+            properties['doi'] = doi.removeprefix(DOI_PREFIX)
+        if is_open_access is not None:
+            properties['is_open_access'] = is_open_access
+        if pdf_url:
+            properties['pdf_url'] = pdf_url
+        # update node
+        self.insert_node(Node.create(NodeType.PAPER, properties), True)
+
+    def insert_paper_batch(self, run_id: int, paper_properties: List[Dict[str, str]]) -> None:
+        """
+        Insert a batch of papers into the database
+
+        :param run_id: ID of run this batch of papers was found in
+        :param paper_properties: Node properties
+        """
+        # ensure open connection
+        if not self._driver:
+            raise RuntimeError("Database driver is not initialized")
+
+        # convert to nodes
+        paper_nodes: List[Node] = [Node.create(NodeType.PAPER, props) for props in paper_properties]
+
+        # add properties
+        set_expressions = set()
+        if paper_nodes[0].required_properties:
+            set_expressions.update([f"n.{k} = paper.{k}" for k in paper_nodes[0].required_properties])
+        if paper_nodes[0].properties:
+            set_expressions.update([f"n.{k} = paper.{k}" for k in paper_nodes[0].properties])
+
+        set_clause = ", ".join(set_expressions)
+        query = f"""
+        MERGE (run:{NodeType.RUN.value} {{id: $run_id}})
+        WITH run
+        UNWIND $papers AS paper
+        MERGE (n:{NodeType.PAPER.value} {{match_id: paper.match_id}})
+        ON CREATE SET {set_clause} ON MATCH SET {set_clause}
+        MERGE (run)-[:{RelationshipType.ADDED.value}]->(n)
+        """
+
+        # batch insert
+        with self._driver.session() as session:
+            session.run(query, run_id=run_id, papers=[{'match_id': node.match_id, **node.required_properties, **node.properties} for node in paper_nodes])
+
+
+
+def _is_model_local(embedding_model: str) -> bool:
+    """
+    Util method to check if the embedding model is downloaded locally
+
+    :param embedding_model: Name of sentence transformer embedding model to use
+    :return: True if downloaded, false otherwise
+    """
+    cache_dir = os.path.expanduser(f"~/{SENTENCE_TRANSFORMER_CACHE}")
+    model_path = os.path.join(cache_dir, f"models--sentence-transformers--{embedding_model}")
+    return os.path.exists(model_path)

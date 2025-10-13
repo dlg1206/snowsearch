@@ -146,13 +146,13 @@ class Logger:
                                  f"Must be one of "
                                  f"{[member.name for member in Level]}")
 
-    def get_data_queue(self, data: Iterable[Any], description: str, unit: str, is_async: bool = False,
+    def get_data_queue(self, data: Iterable[Any] | int, description: str, unit: str, is_async: bool = False,
                        is_threaded: bool = False) -> Iterable[Any]:
         """
         Create a dynamic loading bar if in INFO mode
 
 
-        :param data: Data to be looped over
+        :param data: Data to be looped over. Use int for manual update
         :param description: Description of the process
         :param unit: Unit of the process
         :param is_async: if the data need to be awaited (default: false)
@@ -170,6 +170,8 @@ class Logger:
                 return tqdm(concurrent.futures.as_completed(data),
                             desc=desc, unit=f"{unit}", file=sys.stdout, total=len(list(data)))
             # return non-async
+            if isinstance(data, int):
+                return tqdm(total=data, desc=desc, unit=f"{unit}", file=sys.stdout)
             return tqdm(data, desc=desc, unit=f"{unit}", file=sys.stdout)
         # else just return data, awaited if needed
         return asyncio.as_completed(data) if is_async else data
