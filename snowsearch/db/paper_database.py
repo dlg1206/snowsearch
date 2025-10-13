@@ -104,38 +104,37 @@ class PaperDatabase(Neo4jDatabase):
         self.insert_node(run_node)
         return new_run_id
 
-    def insert_findpapers_query(self, run_id: int, model: str, prompt: str, query: str) -> None:
+    def insert_openalex_query(self, run_id: int, model: str, prompt: str, query: str) -> None:
         """
-        Update a run with the findpapers prompt and resulting query
+        Update a run with the openalex prompt and resulting query
+
+        todo add additional OpenAlex filters used
+        https://docs.openalex.org/api-entities/works/filter-works#works-attribute-filters
 
         :param run_id: ID of run
-        :param model: Model used to generate findpapers query
+        :param model: Model used to generate OpenAlex query
         :param prompt: Original natural language prompt
-        :param query: Resulting findpapers query
+        :param query: Resulting OpenAlex query
         """
         run_node = Node.create(NodeType.RUN, {
             'id': run_id,
-            'findpapers_model': model,
-            'findpapers_prompt': prompt,
-            'findpapers_query': query
+            'openalex_model': model,
+            'openalex_prompt': prompt,
+            'openalex_query': query
         })
         self.insert_node(run_node, True)
 
-    def insert_new_paper(self, run_id: int, title: str, abstract: str) -> None:
+    def insert_new_paper(self, run_id: int, title: str) -> None:
         """
         Insert a paper into the database
 
         :param run_id: ID of run paper found
         :param title: Title of paper
-        :param abstract: Abstract of paper
         """
-        # add paper
-        abstract_embedding = self._embedding_model.encode(abstract, show_progress_bar=False).tolist()
+        # # add paper
+        # abstract_embedding = self._embedding_model.encode(abstract, show_progress_bar=False).tolist()
         paper_node = Node.create(NodeType.PAPER, {
             'id': title,
-            'abstract_text': abstract,
-            'abstract_embedding': abstract_embedding,
-            'processed': False,
             'time_added': datetime.now()
         })
         self.insert_node(paper_node)
@@ -150,8 +149,7 @@ class PaperDatabase(Neo4jDatabase):
                      title: str,
                      doi: str = None,
                      is_open_access: bool = None,
-                     pdf_url: str = None,
-                     processed: bool = None) -> None:
+                     pdf_url: str = None) -> None:
         """
         Update paper fields. Only provided fields will be updated
 
@@ -159,18 +157,15 @@ class PaperDatabase(Neo4jDatabase):
         :param doi: DOI of paper
         :param is_open_access: Is the paper open access?
         :param pdf_url: URL of downloadable PDF
-        :param processed: Has this paper been processed by grobid
         """
         # set properties
-        properties: Dict[str, str | bool] = {'id': title}
+        properties: Dict[str, str | bool | datetime] = {'id': title}
         if doi:
             properties['doi'] = doi.removeprefix(DOI_PREFIX)
         if is_open_access is not None:
             properties['is_open_access'] = is_open_access
         if pdf_url:
             properties['pdf_url'] = pdf_url
-        if processed is not None:
-            properties['processed'] = processed
         # update node
         self.insert_node(Node.create(NodeType.PAPER, properties), True)
 

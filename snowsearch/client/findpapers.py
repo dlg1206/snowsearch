@@ -45,6 +45,7 @@ class ExceedMaxQueryGenerationAttemptsError(Exception):
         return self._model
 
 
+# DEPRECATED Deprecated in favor of using OpenAlex directly
 class FindpapersClient:
     def __init__(self, model_client: ModelClient,
                  config: Dict[str, str | int | List[str] | None]):
@@ -85,7 +86,7 @@ class FindpapersClient:
             '''
             query_match = FPQ_JSON_RE.findall(completion.choices[0].message.content.strip())
             if query_match:
-                query = query_match[0].strip()
+                query = query_match[0].strip().replace("'", '"')  # replace double quotes
                 # report success
                 logger.info(f"Generated findpapers query in {timer.format_time()}s")
                 logger.debug_msg(f"Generated query: {query}")
@@ -105,11 +106,12 @@ class FindpapersClient:
         :param query: findpapers style query to search for papers from
         :return: List of relevant papers
         """
-        with NamedTemporaryFile(prefix="findpapers", suffix=".json") as fp_tmp:
+        with NamedTemporaryFile(prefix="findpapers-", suffix=".json") as fp_tmp:
             logger.info("Starting findpapers search, this may take a while")
             sys.stdout.flush()  # print msg before stderr
             timer = Timer()
-            # todo - supress output?
+            # todo - suppress output?
+            # todo wrap in try catch in case query fails
             findpapers.search(fp_tmp.name, query, **self._config)
             sys.stderr.flush()  # flush all findpapers log messages first
             logger.info(f"Completed seed search in {timer.format_time()}s")

@@ -11,9 +11,9 @@ nodes:
     properties:
       - "start"
       - "end"
-      - "findpapers_model"
-      - "findpapers_prompt"
-      - "findpapers_query"
+      - "openalex_model"
+      - "openalex_prompt"
+      - "openalex_query"
     relationships:
       # This run added this paper
       ADDED:
@@ -29,7 +29,6 @@ nodes:
       - "abstract_embedding"
       - "is_open_access"
       - "pdf_url"
-      - "processed"
       - "time_added"
     relationships:
       # This paper added this paper (during snowballing)
