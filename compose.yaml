@@ -40,6 +40,16 @@ services:
       - type: tmpfs
         target: /logs
 
+  # Grobid service for extracting citations for snowballing
+  grobid:
+    image: grobid/grobid:0.8.2
+    container_name: grobid
+    # TODO - remove public access
+    ports:
+      - "8070:8070"  # API port
+    networks:
+      - snowsearch-net
+
 volumes:
   # for caching abstracts
   abstract_db:
