@@ -24,6 +24,7 @@ DEFAULT_DIMENSIONS = 384
 SENTENCE_TRANSFORMER_CACHE = ".cache/huggingface/hub"
 
 DOI_PREFIX = "https://doi.org/"
+OPENALEX_PREFIX = "https://openalex.org/"
 
 # suppress cuda warnings
 warnings.filterwarnings("ignore", message=".*CUDA initialization.*")
@@ -147,6 +148,7 @@ class PaperDatabase(Neo4jDatabase):
 
     def update_paper(self,
                      title: str,
+                     open_alex_id: str = None,
                      doi: str = None,
                      is_open_access: bool = None,
                      pdf_url: str = None) -> None:
@@ -154,12 +156,15 @@ class PaperDatabase(Neo4jDatabase):
         Update paper fields. Only provided fields will be updated
 
         :param title: Title of paper
+        :param open_alex_id: OpenAlex work ID
         :param doi: DOI of paper
         :param is_open_access: Is the paper open access?
         :param pdf_url: URL of downloadable PDF
         """
         # set properties
         properties: Dict[str, str | bool | datetime] = {'id': title}
+        if open_alex_id:
+            properties['openalex_id'] = open_alex_id.removeprefix(OPENALEX_PREFIX)
         if doi:
             properties['doi'] = doi.removeprefix(DOI_PREFIX)
         if is_open_access is not None:

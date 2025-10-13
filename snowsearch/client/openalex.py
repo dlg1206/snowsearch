@@ -49,6 +49,7 @@ class ExceedMaxQueryGenerationAttemptsError(Exception):
 
 @dataclasses.dataclass
 class OpenAlexDTO:
+    id: str
     title: str
     doi: str
     is_open_access: bool
@@ -132,7 +133,7 @@ class OpenAlexClient:
 
         # parse findings
         return result['meta']['next_cursor'], [
-            OpenAlexDTO(p['title'], p['doi'], bool(p['open_access']['is_oa']), p['open_access']['oa_url'])
+            OpenAlexDTO(p['id'], p['title'], p['doi'], bool(p['open_access']['is_oa']), p['open_access']['oa_url'])
             for p in result.get('results', [])
         ]
 
@@ -204,7 +205,8 @@ class OpenAlexClient:
                         # add new paper
                         logger.debug_msg(f"Found new paper: '{p.title}")
                         paper_db.insert_new_paper(run_id, p.title)
-                        paper_db.update_paper(p.title, doi=p.doi, is_open_access=p.is_open_access, pdf_url=p.pdf_url)
+                        paper_db.update_paper(p.title, open_alex_id=p.id, doi=p.doi, is_open_access=p.is_open_access, pdf_url=p.pdf_url)
+                    break
                     # no pages left
                     if not next_cursor:
                         break
