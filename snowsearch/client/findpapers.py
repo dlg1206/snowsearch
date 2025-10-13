@@ -45,7 +45,7 @@ class ExceedMaxQueryGenerationAttemptsError(Exception):
         return self._model
 
 
-# DEPRECATED Deprecated in favor of using OpenAlex directly
+# DEPRECATED Deprecated in favor of using OpenAlex directly, may reintegrate later
 class FindpapersClient:
     def __init__(self, model_client: ModelClient,
                  config: Dict[str, str | int | List[str] | None]):

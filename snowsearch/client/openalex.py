@@ -2,14 +2,13 @@ import asyncio
 import dataclasses
 import os
 import re
-from asyncio import Semaphore
+from datetime import datetime
 from typing import List, Dict, Tuple
 
 from aiohttp import ClientSession
 
 from client.ai.model import ModelClient
-from db.entity import NodeType
-from db.paper_database import PaperDatabase
+from db.paper_database import PaperDatabase, DOI_PREFIX
 from util.logger import logger
 
 """
@@ -33,6 +32,7 @@ QUERY_JSON_RE = re.compile(r'\{\n.*"query": "(.*?)"')
 MAX_RETRIES = 3
 
 OPENALEX_ENDPOINT = "https://api.openalex.org"
+OPENALEX_PREFIX = "https://openalex.org/"
 
 
 class ExceedMaxQueryGenerationAttemptsError(Exception):
@@ -54,6 +54,16 @@ class OpenAlexDTO:
     doi: str
     is_open_access: bool
     pdf_url: str
+
+    def to_properties(self) -> Dict[str, str | bool | datetime]:
+        return {
+            'id': self.title,
+            'openalex_id': self.id.removeprefix(OPENALEX_PREFIX) if self.id else None,
+            'doi': self.doi.removeprefix(DOI_PREFIX) if self.doi else None,
+            'is_open_access': self.is_open_access,
+            'pdf_url': self.pdf_url,
+            'time_added': datetime.now()
+        }
 
 
 class OpenAlexClient:
@@ -108,12 +118,11 @@ class OpenAlexClient:
             result = await response.json()
         return int(result['meta']['count'])
 
-    async def _fetch_papers(self, semaphore: Semaphore, session: ClientSession, query: str, cursor: str = '*') -> Tuple[
+    async def _fetch_papers(self, session: ClientSession, query: str, cursor: str = '*') -> Tuple[
         str | None, List[OpenAlexDTO]]:
         """
         Search for exact title match from OpenAlex
 
-        :param semaphore: Semaphore to respect rate limiting
         :param session: HTTP session to use
         :param query: Query string to use
         :param cursor: Cursor to use for pagination (Default: starting cursor)
@@ -123,13 +132,12 @@ class OpenAlexClient:
         params = {'filter': f"title_and_abstract.search:{query}", 'cursor': cursor, 'per_page': MAX_PER_PAGE}
         self._add_auth(params)
         # block to respect rate limit
-        async with semaphore:
-            await asyncio.sleep(RATE_LIMIT_SLEEP)
-            # make the request
-            async with session.get(f"{OPENALEX_ENDPOINT}/works", params=params) as response:
-                logger.debug_msg(f"Querying '{response.url}'")
-                response.raise_for_status()
-                result = await response.json()
+        await asyncio.sleep(RATE_LIMIT_SLEEP)
+        # make the request
+        async with session.get(f"{OPENALEX_ENDPOINT}/works", params=params) as response:
+            logger.debug_msg(f"Querying '{response.url}'")
+            response.raise_for_status()
+            result = await response.json()
 
         # parse findings
         return result['meta']['next_cursor'], [
@@ -183,7 +191,6 @@ class OpenAlexClient:
         :param paper_db: Database to save papers to
         :param query: Query string to use
         """
-        semaphore = Semaphore()
         async with ClientSession() as session:
             hits = await self._fetch_paper_count(session, query)
             logger.debug_msg(f"Found {hits} papers in OpenAlex")
@@ -192,27 +199,19 @@ class OpenAlexClient:
             next_cursor = "*"
             while True:
                 try:
-                    next_cursor, papers = await self._fetch_papers(semaphore, session, query, next_cursor)
-                    # queue papers to be saved
-                    # todo - perf to save results in parallel
-                    for p in papers:
-                        if not isinstance(progress, int):
-                            progress.update(1)
-
-                        if paper_db.has(NodeType.PAPER, p.title):
-                            logger.warn(f"Skipping duplicate: '{p.title}'")
-                            continue
-                        # add new paper
-                        logger.debug_msg(f"Found new paper: '{p.title}")
-                        paper_db.insert_new_paper(run_id, p.title)
-                        paper_db.update_paper(p.title, open_alex_id=p.id, doi=p.doi, is_open_access=p.is_open_access, pdf_url=p.pdf_url)
-                    break
+                    # save results
+                    next_cursor, papers = await self._fetch_papers(session, query, next_cursor)
+                    paper_db.insert_paper_batch(run_id, [p.to_properties() for p in papers])
                     # no pages left
                     if not next_cursor:
                         break
                 except Exception as e:
                     # todo - handle exceed requests per day
                     logger.error_exp(e)
+                finally:
+                    # update progress
+                    if not isinstance(progress, int):
+                        progress.update(MAX_PER_PAGE)
 
     @property
     def model(self) -> str:

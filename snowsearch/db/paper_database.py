@@ -1,7 +1,7 @@
 import os
 import warnings
 from datetime import datetime
-from typing import Dict
+from typing import Dict, List
 
 from sentence_transformers import SentenceTransformer
 
@@ -24,7 +24,6 @@ DEFAULT_DIMENSIONS = 384
 SENTENCE_TRANSFORMER_CACHE = ".cache/huggingface/hub"
 
 DOI_PREFIX = "https://doi.org/"
-OPENALEX_PREFIX = "https://openalex.org/"
 
 # suppress cuda warnings
 warnings.filterwarnings("ignore", message=".*CUDA initialization.*")
@@ -163,8 +162,8 @@ class PaperDatabase(Neo4jDatabase):
         """
         # set properties
         properties: Dict[str, str | bool | datetime] = {'id': title}
-        if open_alex_id:
-            properties['openalex_id'] = open_alex_id.removeprefix(OPENALEX_PREFIX)
+        # if open_alex_id:
+        #     properties['openalex_id'] = open_alex_id.removeprefix(OPENALEX_PREFIX)
         if doi:
             properties['doi'] = doi.removeprefix(DOI_PREFIX)
         if is_open_access is not None:
@@ -173,6 +172,42 @@ class PaperDatabase(Neo4jDatabase):
             properties['pdf_url'] = pdf_url
         # update node
         self.insert_node(Node.create(NodeType.PAPER, properties), True)
+
+    def insert_paper_batch(self, run_id: int, paper_properties: List[Dict[str, str]]) -> None:
+        """
+        Insert a batch of papers into the database
+
+        :param run_id: ID of run this batch of papers was found in
+        :param paper_properties: Node properties
+        """
+        # ensure open connection
+        if not self._driver:
+            raise RuntimeError("Database driver is not initialized")
+
+        # convert to nodes
+        paper_nodes: List[Node] = [Node.create(NodeType.PAPER, props) for props in paper_properties]
+
+        # add properties
+        set_expressions = set()
+        if paper_nodes[0].required_properties:
+            set_expressions.update([f"n.{k} = paper.{k}" for k in paper_nodes[0].required_properties])
+        if paper_nodes[0].properties:
+            set_expressions.update([f"n.{k} = paper.{k}" for k in paper_nodes[0].properties])
+
+        set_clause = ", ".join(set_expressions)
+        query = f"""
+        MERGE (run:{NodeType.RUN.value} {{id: $run_id}})
+        WITH run
+        UNWIND $papers AS paper
+        MERGE (n:{NodeType.PAPER.value} {{match_id: paper.match_id}})
+        ON CREATE SET {set_clause} ON MATCH SET {set_clause}
+        MERGE (run)-[:{RelationshipType.ADDED.value}]->(n)
+        """
+
+        # batch insert
+        with self._driver.session() as session:
+            session.run(query, run_id=run_id, papers=[{'match_id': node.match_id, **node.required_properties, **node.properties} for node in paper_nodes])
+
 
 
 def _is_model_local(embedding_model: str) -> bool:
