@@ -1,7 +1,7 @@
 import os
 import warnings
 from datetime import datetime
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 from sentence_transformers import SentenceTransformer
 
@@ -206,8 +206,27 @@ class PaperDatabase(Neo4jDatabase):
 
         # batch insert
         with self._driver.session() as session:
-            session.run(query, run_id=run_id, papers=[{'match_id': node.match_id, **node.required_properties, **node.properties} for node in paper_nodes])
+            session.run(query, run_id=run_id,
+                        papers=[{'match_id': node.match_id, **node.required_properties, **node.properties} for node in
+                                paper_nodes])
 
+    def get_all_unprocessed_pdf_urls(self) -> List[Tuple[str, str]]:
+        """
+        Get all papers with pdfs that haven't been processed by grobid yet
+
+        :return: List of paper titles and pdf urls
+        """
+        query = f"""
+            MATCH (p:{NodeType.PAPER.value}) 
+            WHERE p.pdf_url IS NOT NULL 
+            AND p.time_grobid_processed IS NULL 
+            AND p.is_open_access 
+            RETURN p.id AS id, p.pdf_url AS pdf_url
+            """
+        # todo - add time filters
+        with self._driver.session() as session:
+            results = session.run(query)
+            return [(r['id'], r['pdf_url']) for r in results]
 
 
 def _is_model_local(embedding_model: str) -> bool:

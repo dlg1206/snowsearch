@@ -34,14 +34,17 @@ findpapers:
   # until:
 
   # The max number of papers to collect
-  limit: 10
+  # limit: 10
 
   # The max number of papers to collect per each database
   # limit_per_database:
 
   # List of databases where the search should be performed, if not specified all databases will be used
+  # To access IEEE and Scopus, an API key must be used
+  #   IEEE (https://developer.ieee.org) and set FINDPAPERS_SCOPUS_API_TOKEN env var
+  #   Scopus (https://dev.elsevier.com) and set FINDPAPERS_IEEE_API_TOKEN env var
   # options:
-  # - acm
+  # - ~~acm~~ ACM is an option but not working, see https://github.com/jonatasgrosman/findpapers/issues/6
   # - arxiv
   # - biorxiv
   # - ieee
@@ -69,3 +72,34 @@ openalex:
   # Optional email to use for 'polite pool' for better access
   # https://docs.openalex.org/how-to-use-the-api/rate-limits-and-authentication#the-polite-pool
   # email:
+
+grobid:
+  # https://github.com/kermitt2/grobid-client-python?tab=readme-ov-file#default-configuration
+
+  # Host and port of a grobid server, will default to 'localhost:8070'
+  # Useful if grobid server is not running locally, ie running on a remote host with more resources available
+  # Superseded by the GROBID_SERVER env variable
+  # grobid_server:
+
+  # Thread pool size.
+  # Tune carefully: a large batch size will result in the data being written less frequently
+  # Default is 1000
+  # batch_size:
+
+  # Wait time when server is busy (seconds)
+  # Default is 5
+  # sleep_time:
+
+  # Client-side timeout (seconds)
+  # Default is 180
+  # timeout:
+
+  # List of TEI XML elements for which GROBID should extract coordinates (bounding boxes), ie x y location in pdf.
+  # Defaults are
+  # - persName
+  # - figure
+  # - ref
+  # - biblStruct
+  # - formula
+  # - s
+  # coordinates:
