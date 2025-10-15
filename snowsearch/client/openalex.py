@@ -183,7 +183,7 @@ class OpenAlexClient:
         # error if exceed retries
         raise ExceedMaxQueryGenerationAttemptsError(self._model_client.model)
 
-    async def save_papers(self, run_id: int, paper_db: PaperDatabase, query: str) -> None:
+    async def save_seed_papers(self, run_id: int, paper_db: PaperDatabase, query: str) -> None:
         """
         Fetch papers from OpenAlex and save to database
 
@@ -212,6 +212,8 @@ class OpenAlexClient:
                     # update progress
                     if not isinstance(progress, int):
                         progress.update(MAX_PER_PAGE)
+
+    # todo fetch by doi, fetch by doi
 
     @property
     def model(self) -> str:

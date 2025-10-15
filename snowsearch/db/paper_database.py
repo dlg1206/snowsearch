@@ -259,32 +259,38 @@ class PaperDatabase(Neo4jDatabase):
             results = session.run(query)
             return [(r['id'], r['pdf_url']) for r in results]
 
-    def get_similar_papers(self, prompt: str, top_k: int = None) -> List[str]:
+    def get_similar_papers(self, prompt: str, top_k: int = 100, min_score: float = None) -> List[Dict[str, str | int]]:
         """
         Get papers with abstracts that best match the prompt
 
         :param prompt: Search prompt
-        :param top_k: Top papers to return (Default: All)
-        :return: List of top_k paper titles that best match the given prompt
+        :param top_k: Top papers to return (Default: 100)
+        :param min_score: Minimum similarity score of prompt to abstract (Default: None but 0.4 recommended)
+        :return: List of top_k paper titles that best match the given prompt and their score
         """
+        # validate min score
+        if min_score and (min_score > 1 or min_score < -1):
+            raise ValueError("Param 'min_score' must be between -1 and 1")
+
         prompt_embedding = self._embedding_model.encode(prompt, show_progress_bar=False).tolist()
         query = f"""
         CALL db.index.vector.queryNodes(
-          'paper_abstract_index', {'$topK' if top_k else ''}
+          'paper_abstract_index',
+          $topK,
           $embedding
         ) YIELD node, score
-        WHERE node.grobid_status = 200
-        RETURN node.id AS id
+        WHERE node.grobid_status = 200 {'AND score > $minScore' if min_score else ''}
+        RETURN node.id AS id, score AS score
         ORDER BY score DESC
         """
         # set params
-        params: Dict[str, Any] = {'embedding': prompt_embedding}
-        if top_k:
-            params['topK'] = top_k
+        params: Dict[str, Any] = {'topK': top_k, 'embedding': prompt_embedding}
+        if min_score:
+            params['minScore'] = min_score
         # exe query
         with self._driver.session() as session:
             results = session.run(query, **params)
-            return [r['id'] for r in results]
+            return [{'id': r['id'], 'score': r['score']} for r in results]
 
     def get_unprocessed_citations(self, source_title: str, top_k: int = None) -> List[Dict[str, str]]:
         """
