@@ -47,7 +47,7 @@ class PaperDatabase(Neo4jDatabase):
             logger.debug_msg("Embedding model utilizing gpu")
         else:
             device = "cpu"
-            logger.warn("Using cpu to create abstract embeddings -- this may impact performance")
+            logger.warn("Using cpu to create embeddings -- this may impact performance")
 
         # download embedding model if needed
         model_downloaded = _is_model_local(embedding_model)
@@ -258,6 +258,29 @@ class PaperDatabase(Neo4jDatabase):
         with self._driver.session() as session:
             results = session.run(query)
             return [(r['id'], r['pdf_url']) for r in results]
+
+    def get_similar_papers(self, prompt: str, top_k: int) -> List[str]:
+        """
+        Get papers with abstracts that best match the prompt
+
+        :param prompt: Search prompt
+        :param top_k: Top papers to return
+        :return: List of top_k paper titles that best match the given prompt
+        """
+        prompt_embedding = self._embedding_model.encode(prompt, show_progress_bar=False).tolist()
+        query = """
+        CALL db.index.vector.queryNodes(
+          'paper_abstract_index',
+          $topK,
+          $embedding
+        ) YIELD node, score
+        WHERE node.grobid_status = 200
+        RETURN node.id AS id
+        ORDER BY score DESC
+        """
+        with self._driver.session() as session:
+            results = session.run(query, topK=top_k, embedding=prompt_embedding)
+            return [r['id'] for r in results]
 
 
 def _is_model_local(embedding_model: str) -> bool:

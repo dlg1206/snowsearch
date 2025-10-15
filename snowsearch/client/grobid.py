@@ -228,7 +228,7 @@ class GrobidWorker:
                         if result.citations:
                             paper_properties = []
                             for c in result.citations:
-                                paper_properties.append({'id': c.title, 'doi': c.doi})
+                                paper_properties.append({'id': c.title, 'doi': c.doi, 'time_added': datetime.now()})
                                 citations.add(c.title)
                             paper_db.insert_citation_paper_batch(result.title, paper_properties)
 

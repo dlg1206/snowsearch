@@ -202,7 +202,6 @@ class OpenAlexClient:
                     # save results
                     next_cursor, papers = await self._fetch_papers(session, query, next_cursor)
                     paper_db.insert_run_paper_batch(run_id, [p.to_properties() for p in papers])
-                    break
                     # no pages left
                     if not next_cursor:
                         break
