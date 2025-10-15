@@ -131,6 +131,10 @@ class PaperDatabase(Neo4jDatabase):
                      abstract_text: str = None,
                      is_open_access: bool = None,
                      pdf_url: str = None,
+                     download_status: int = None,
+                     download_error_msg: str = None,
+                     grobid_status: int = None,
+                     grobid_error_msg: str = None,
                      time_grobid_processed: datetime = None,
                      time_added: datetime = None) -> None:
         """
@@ -143,10 +147,14 @@ class PaperDatabase(Neo4jDatabase):
         :param abstract_text: Abstract of paper
         :param is_open_access: Is paper open access yet
         :param pdf_url: URL of paper pdf
+        :param download_status: HTTP status of download
+        :param download_error_msg: Error message for download
+        :param grobid_status: HTTP status of grobid process
+        :param grobid_error_msg: Error message for grobid
         :param time_grobid_processed: Time processed with grobid
         :param time_added: Time initially added
         """
-        # add none-null properties
+        # add properties
         properties: Dict[str, Any] = {
             'id': title,
             'openalex_id': openalex_id,
@@ -154,10 +162,13 @@ class PaperDatabase(Neo4jDatabase):
             'abstract_text': abstract_text,
             'is_open_access': is_open_access,
             'pdf_url': pdf_url,
-            'time_grobid_process': time_grobid_processed,
+            'download_status': download_status,
+            'download_error_msg': download_error_msg,
+            'grobid_status': grobid_status,
+            'grobid_error_msg': grobid_error_msg,
+            'time_grobid_processed': time_grobid_processed,
             'time_added': time_added
         }
-        properties = {k: v for k, v in properties.items() if v is not None}
 
         # calculate embedding if abstract available
         if abstract_text:
@@ -178,6 +189,8 @@ class PaperDatabase(Neo4jDatabase):
     def insert_paper_batch(self, run_id: int, paper_properties: List[Dict[str, str]]) -> None:
         """
         Insert a batch of papers into the database
+
+        todo - cleanup
 
         :param run_id: ID of run this batch of papers was found in
         :param paper_properties: Node properties
@@ -212,6 +225,51 @@ class PaperDatabase(Neo4jDatabase):
                         papers=[{'match_id': node.match_id, **node.required_properties, **node.properties} for node in
                                 paper_nodes])
 
+    def insert_citation_papers(self, source_title: str, citations: List[Dict[str, str]]) -> None:
+        """
+        Batch insert a list of citation papers found by grobid
+
+        todo - cleanup
+
+        :param source_title: Title of paper that cites these papers
+        :param citations: List of paper properties
+        """
+        # ensure open connection
+        if not self._driver:
+            raise RuntimeError("Database driver is not initialized")
+
+        # convert to nodes
+        paper_nodes: List[Node] = [Node.create(NodeType.PAPER, props) for props in citations]
+
+        # add properties
+        set_expressions = set()
+        all_props = set()
+        if paper_nodes[0].required_properties:
+            all_props.update(paper_nodes[0].required_properties)
+        if paper_nodes[0].properties:
+            all_props.update(paper_nodes[0].properties)
+
+        # build the SET expressions
+        set_expressions.update([f"n.{k} = coalesce(n.{k}, paper.{k})" for k in all_props])
+        set_clause = ", ".join(set_expressions)
+
+        # construct the final query
+        query = f"""
+        MERGE (source:{NodeType.PAPER.value} {{id: $source_id}})
+        WITH source
+        UNWIND $papers AS paper
+        MERGE (n:{NodeType.PAPER.value} {{match_id: paper.match_id}})
+        ON CREATE SET {set_clause} ON MATCH SET {set_clause}
+        MERGE (source)-[:{RelationshipType.REFERENCES.value}]->(n)
+        """
+
+        # batch insert
+        with self._driver.session() as session:
+            session.run(query,
+                        source_id=source_title,
+                        papers=[{'match_id': node.match_id, **node.required_properties, **node.properties} for node in
+                                paper_nodes])
+
     def get_all_unprocessed_pdf_urls(self) -> List[Tuple[str, str]]:
         """
         Get all papers with pdfs that haven't been processed by grobid yet
@@ -221,7 +279,7 @@ class PaperDatabase(Neo4jDatabase):
         query = f"""
             MATCH (p:{NodeType.PAPER.value}) 
             WHERE p.pdf_url IS NOT NULL 
-            AND p.time_grobid_processed IS NULL 
+            AND p.grobid_status IS NULL 
             AND p.is_open_access 
             RETURN p.id AS id, p.pdf_url AS pdf_url
             """
