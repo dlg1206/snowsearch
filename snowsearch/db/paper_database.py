@@ -1,7 +1,7 @@
 import os
 import warnings
 from datetime import datetime
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Any
 
 from sentence_transformers import SentenceTransformer
 
@@ -10,13 +10,13 @@ from db.entity import Node, NodeType, RelationshipType
 from util.logger import logger
 from util.timer import Timer
 
-"""
+"""`
 File: paper_database.py
 
 Description: Specialized interface for abstracting Neo4j commands to the database
 
 @author Derek Garcia
-"""
+`"""
 
 # embedding model details
 DEFAULT_EMBEDDING_MODEL = "all-MiniLM-L6-v2"
@@ -124,54 +124,56 @@ class PaperDatabase(Neo4jDatabase):
         })
         self.insert_node(run_node, True)
 
-    def insert_new_paper(self, run_id: int, title: str) -> None:
-        """
-        Insert a paper into the database
-
-        :param run_id: ID of run paper found
-        :param title: Title of paper
-        """
-        # # add paper
-        # abstract_embedding = self._embedding_model.encode(abstract, show_progress_bar=False).tolist()
-        paper_node = Node.create(NodeType.PAPER, {
-            'id': title,
-            'time_added': datetime.now()
-        })
-        self.insert_node(paper_node)
-
-        # add relationship to current run
-        run_node = Node.create(NodeType.RUN, {'id': run_id})
-        self.insert_relationship(run_node,
-                                 run_node.create_relationship_to(paper_node.type, RelationshipType.ADDED),
-                                 paper_node)
-
-    def update_paper(self,
-                     title: str,
-                     open_alex_id: str = None,
+    def upsert_paper(self, title: str,
+                     run_id: int = None,
+                     openalex_id: str = None,
                      doi: str = None,
+                     abstract_text: str = None,
                      is_open_access: bool = None,
-                     pdf_url: str = None) -> None:
+                     pdf_url: str = None,
+                     time_grobid_processed: datetime = None,
+                     time_added: datetime = None) -> None:
         """
-        Update paper fields. Only provided fields will be updated
+        Insert paper into database and optional details
 
-        :param title: Title of paper
-        :param open_alex_id: OpenAlex work ID
+        :param title: Title of paper (key)
+        :param run_id: ID of run
+        :param openalex_id: OpenAlex Work ID
         :param doi: DOI of paper
-        :param is_open_access: Is the paper open access?
-        :param pdf_url: URL of downloadable PDF
+        :param abstract_text: Abstract of paper
+        :param is_open_access: Is paper open access yet
+        :param pdf_url: URL of paper pdf
+        :param time_grobid_processed: Time processed with grobid
+        :param time_added: Time initially added
         """
-        # set properties
-        properties: Dict[str, str | bool | datetime] = {'id': title}
-        # if open_alex_id:
-        #     properties['openalex_id'] = open_alex_id.removeprefix(OPENALEX_PREFIX)
-        if doi:
-            properties['doi'] = doi.removeprefix(DOI_PREFIX)
-        if is_open_access is not None:
-            properties['is_open_access'] = is_open_access
-        if pdf_url:
-            properties['pdf_url'] = pdf_url
-        # update node
-        self.insert_node(Node.create(NodeType.PAPER, properties), True)
+        # add none-null properties
+        properties: Dict[str, Any] = {
+            'id': title,
+            'openalex_id': openalex_id,
+            'doi': doi,
+            'abstract_text': abstract_text,
+            'is_open_access': is_open_access,
+            'pdf_url': pdf_url,
+            'time_grobid_process': time_grobid_processed,
+            'time_added': time_added
+        }
+        properties = {k: v for k, v in properties.items() if v is not None}
+
+        # calculate embedding if abstract available
+        if abstract_text:
+            abstract_embedding = self._embedding_model.encode(abstract_text, show_progress_bar=False).tolist()
+            properties['abstract_embedding'] = abstract_embedding
+
+        # insert node
+        paper_node = Node.create(NodeType.PAPER, properties)
+        is_new_node = self.insert_node(paper_node, True)  # update matches, don't replace existing fields
+
+        # add relationship to current run if new node and run id provided
+        if run_id and is_new_node:
+            run_node = Node.create(NodeType.RUN, {'id': run_id})
+            self.insert_relationship(run_node,
+                                     run_node.create_relationship_to(paper_node.type, RelationshipType.ADDED),
+                                     paper_node)
 
     def insert_paper_batch(self, run_id: int, paper_properties: List[Dict[str, str]]) -> None:
         """
