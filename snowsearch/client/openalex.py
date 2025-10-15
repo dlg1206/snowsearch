@@ -2,10 +2,12 @@ import asyncio
 import dataclasses
 import os
 import re
+from asyncio import Semaphore
 from datetime import datetime
 from typing import List, Dict, Tuple, Any
 
-from aiohttp import ClientSession
+from aiohttp import ClientSession, ClientResponseError
+from yarl import URL
 
 from client.ai.model import ModelClient
 from db.paper_database import PaperDatabase, DOI_PREFIX
@@ -102,7 +104,7 @@ class OpenAlexClient:
 
     async def _fetch(self, session: ClientSession, openalex_endpoint: str, params: Dict[str, str | int] = None,
                      per_page: int = MAX_PER_PAGE) -> Dict[str, Any]:
-        # init paramas if dne
+        # init params if dne
         if not params:
             params = dict()
         # update params
@@ -110,8 +112,9 @@ class OpenAlexClient:
         params['per_page'] = per_page
         # block to respect rate limit
         await asyncio.sleep(RATE_LIMIT_SLEEP)
-        # make the request
-        url = f"{OPENALEX_BASE}/{openalex_endpoint}"
+        # make the request, remove key for logging
+        url = URL(f"{OPENALEX_BASE}/{openalex_endpoint.removeprefix('/')}").with_query(params).without_query_params(
+            'OPENALEX_API_KEY')
         logger.debug_msg(f"Querying '{url}'")
         async with session.get(url, params=params) as response:
             response.raise_for_status()
@@ -130,7 +133,7 @@ class OpenAlexClient:
         """
         # fetch papers
         params = {'filter': f"title_and_abstract.search:{query}", 'cursor': cursor}
-        result = await self._fetch(session, "/works", params)
+        result = await self._fetch(session, "works", params)
 
         # parse findings
         return result['meta']['next_cursor'], [
@@ -146,7 +149,7 @@ class OpenAlexClient:
         :param query: Query string to use
         :return: Number of papers the query matches
         """
-        result = await self._fetch(session, "/works", {'filter': f"title_and_abstract.search:{query}"}, 1)
+        result = await self._fetch(session, "works", {'filter': f"title_and_abstract.search:{query}"}, 1)
         return int(result['meta']['count'])
 
     async def _fetch_by_doi(self, session: ClientSession, doi: str) -> OpenAlexDTO | None:
@@ -158,15 +161,15 @@ class OpenAlexClient:
         :return: Matching OpenAlex paper, None if no matches
         """
         # make request
-        result = await self._fetch(session, f"/works/{DOI_PREFIX}{doi}", per_page=1)
-
-        # return none if no hits
-        if not result['meta']['count']:
+        try:
+            paper = await self._fetch(session, f"works/{DOI_PREFIX}{doi}", per_page=1)
+            # parse results
+            return OpenAlexDTO(paper['id'], paper['title'], doi, bool(paper['open_access']['is_oa']),
+                               paper['open_access']['oa_url'])
+        except ClientResponseError:
+            # todo - assuming 404
+            # return none if no hits
             return None
-        # else parse results
-        paper = result['results'][0]
-        return OpenAlexDTO(paper['id'], paper['title'], doi, bool(paper['open_access']['is_oa']),
-                           paper['open_access']['oa_url'])
 
     async def _fetch_by_exact_title(self, session: ClientSession, title: str) -> OpenAlexDTO | None:
         """
@@ -180,7 +183,7 @@ class OpenAlexClient:
         # remove commas since aren't supported in search
         # https://github.com/ropensci/openalexR/issues/254
         result = await self._fetch(session,
-                                   f"/works", {'filter': f"title_and_abstract.search:{title.replace(',', ' ')}"},
+                                   "works", {'filter': f"title_and_abstract.search:{title.replace(',', ' ')}"},
                                    1)
 
         # return none if no hits
@@ -193,6 +196,88 @@ class OpenAlexClient:
             return None
         return OpenAlexDTO(paper['id'], paper['title'], paper['doi'], bool(paper['open_access']['is_oa']),
                            paper['open_access']['oa_url'])
+
+    async def _fetch_citation_task(self,
+                                   semaphore: Semaphore,
+                                   session: ClientSession,
+                                   doi: str | None,
+                                   title: str | None) -> OpenAlexDTO | None:
+        """
+        Task to fetch details for a single citation / paper
+        First attempt to get by DOI if provided, then title
+
+        :param semaphore: Semaphore to limit concurrent requests
+        :param session: HTTP session to use
+        :param doi: DOI id to search for
+        :param title: Fallback title to search for
+        :return: Matching OpenAlex paper, None if no matches
+        """
+        method = None
+        paper = None
+        async with semaphore:
+            # first search by doi
+            if doi:
+                paper = await self._fetch_by_doi(session, doi)
+                method = 'doi'
+            # if couldn't find by doi or no doi, try title
+            if title and not paper:
+                paper = await self._fetch_by_exact_title(session, title)
+                method = 'title'
+        # return paper if found
+        if paper:
+            logger.debug_msg(f"Found '{paper.title}' by {method}")
+            return paper
+        # else none
+        return None
+
+    async def save_seed_papers(self, run_id: int, paper_db: PaperDatabase, query: str) -> None:
+        """
+        Fetch papers from OpenAlex based on a query and save to database
+
+        :param run_id: ID of current run
+        :param paper_db: Database to save papers to
+        :param query: Query string to use
+        """
+        async with ClientSession() as session:
+            hits = await self._fetch_paper_count(session, query)
+            logger.debug_msg(f"Found {hits} papers in OpenAlex")
+            progress = logger.get_data_queue(hits, "Querying OpenAlex Database", "paper")
+            # fetch all papers
+            next_cursor = "*"
+            while True:
+                try:
+                    # save results
+                    next_cursor, papers = await self._fetch_page(session, query, next_cursor)
+                    paper_db.insert_run_paper_batch(run_id, [p.to_properties() for p in papers])
+                    # no pages left
+                    if not next_cursor:
+                        break
+                except Exception as e:
+                    # todo - handle exceed requests per day
+                    logger.error_exp(e)
+                finally:
+                    # update progress
+                    if not isinstance(progress, int):
+                        progress.update(MAX_PER_PAGE)
+
+    async def save_citation_papers(self, paper_db: PaperDatabase, citations: List[Dict[str, str | None]]) -> None:
+        """
+        Fetch details for the given list of citations and save to database
+
+        :param paper_db: Database to save papers to
+        :param citations: List of citations to fetch details for
+        """
+        semaphore = Semaphore()  # semaphore so only 1 request at a time to prevent tripping rate limit
+        logger.debug_msg(f"Searching for details for {len(citations)} citations")
+        async with ClientSession() as session:
+            tasks = [self._fetch_citation_task(semaphore, session, c.get('doi'), c.get('id')) for c in citations]
+            for future in logger.get_data_queue(tasks, "Fetching citation details", "citation", is_async=True):
+                try:
+                    result = await future
+                    # todo save to db
+                except Exception as e:
+                    # todo - handle exceed requests per day
+                    logger.error_exp(e)
 
     def prompt_to_query(self, prompt: str) -> str:
         """
@@ -231,38 +316,6 @@ class OpenAlexClient:
                 logger.warn("Failed to generate OpenAlex query, retrying. . .")
         # error if exceed retries
         raise ExceedMaxQueryGenerationAttemptsError(self._model_client.model)
-
-    async def save_seed_papers(self, run_id: int, paper_db: PaperDatabase, query: str) -> None:
-        """
-        Fetch papers from OpenAlex and save to database
-
-        :param run_id: ID of current run
-        :param paper_db: Database to save papers to
-        :param query: Query string to use
-        """
-        async with ClientSession() as session:
-            hits = await self._fetch_paper_count(session, query)
-            logger.debug_msg(f"Found {hits} papers in OpenAlex")
-            progress = logger.get_data_queue(hits, "Querying OpenAlex Database", "paper")
-            # fetch all papers
-            next_cursor = "*"
-            while True:
-                try:
-                    # save results
-                    next_cursor, papers = await self._fetch_page(session, query, next_cursor)
-                    paper_db.insert_run_paper_batch(run_id, [p.to_properties() for p in papers])
-                    # no pages left
-                    if not next_cursor:
-                        break
-                except Exception as e:
-                    # todo - handle exceed requests per day
-                    logger.error_exp(e)
-                finally:
-                    # update progress
-                    if not isinstance(progress, int):
-                        progress.update(MAX_PER_PAGE)
-
-    # todo fetch by doi, fetch by doi
 
     @property
     def model(self) -> str:

@@ -250,7 +250,8 @@ class PaperDatabase(Neo4jDatabase):
         query = f"""
             MATCH (p:{NodeType.PAPER.value}) 
             WHERE p.pdf_url IS NOT NULL 
-            p.download_status IS NULL AND p.grobid_status IS NULL 
+            AND p.download_status IS NULL 
+            AND p.grobid_status IS NULL 
             AND p.is_open_access 
             RETURN p.id AS id, p.pdf_url AS pdf_url
             """
