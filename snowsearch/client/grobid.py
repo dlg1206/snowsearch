@@ -230,7 +230,7 @@ class GrobidWorker:
                             for c in result.citations:
                                 paper_properties.append({'id': c.title, 'doi': c.doi})
                                 citations.add(c.title)
-                            paper_db.insert_citation_papers(result.title, paper_properties)
+                            paper_db.insert_citation_paper_batch(result.title, paper_properties)
 
                         num_success += 1
                     # failed to download pdf

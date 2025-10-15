@@ -186,14 +186,37 @@ class PaperDatabase(Neo4jDatabase):
                                      run_node.create_relationship_to(paper_node.type, RelationshipType.ADDED),
                                      paper_node)
 
-    def insert_paper_batch(self, run_id: int, paper_properties: List[Dict[str, str]]) -> None:
+    def insert_run_paper_batch(self, run_id: int, paper_properties: List[Dict[str, str]]) -> None:
         """
-        Insert a batch of papers into the database
-
-        todo - cleanup
+        Insert a batch of papers found by an OpenAlex run
 
         :param run_id: ID of run this batch of papers was found in
-        :param paper_properties: Node properties
+        :param paper_properties: List of paper properties
+        """
+        # wrapper to keep relationship logic internal
+        self._insert_paper_batch(Node.create(NodeType.RUN, {'id': run_id}), RelationshipType.ADDED, paper_properties)
+
+    def insert_citation_paper_batch(self, source_title: str, paper_properties: List[Dict[str, str]]) -> None:
+        """
+        Insert a batch of papers cited by a source paper
+
+        :param source_title: Title of paper that cites these papers
+        :param paper_properties: List of paper properties
+        """
+        # wrapper to keep relationship logic internal
+        self._insert_paper_batch(Node.create(NodeType.PAPER, {'id': source_title}), RelationshipType.REFERENCES,
+                                 paper_properties)
+
+    def _insert_paper_batch(self,
+                            source_node: Node,
+                            rel_type: RelationshipType,
+                            paper_properties: List[Dict[str, str]]) -> None:
+        """
+        Batch insert a list of papers found by a source
+
+        :param source_node: Source node that found this batch of papers
+        :param rel_type: Relationship of source node to batch
+        :param paper_properties: List of paper properties of the batch
         """
         # ensure open connection
         if not self._driver:
@@ -201,74 +224,22 @@ class PaperDatabase(Neo4jDatabase):
 
         # convert to nodes
         paper_nodes: List[Node] = [Node.create(NodeType.PAPER, props) for props in paper_properties]
-
-        # add properties
-        set_expressions = set()
-        if paper_nodes[0].required_properties:
-            set_expressions.update([f"n.{k} = paper.{k}" for k in paper_nodes[0].required_properties])
-        if paper_nodes[0].properties:
-            set_expressions.update([f"n.{k} = paper.{k}" for k in paper_nodes[0].properties])
-
-        set_clause = ", ".join(set_expressions)
-        query = f"""
-        MERGE (run:{NodeType.RUN.value} {{id: $run_id}})
-        WITH run
-        UNWIND $papers AS paper
-        MERGE (n:{NodeType.PAPER.value} {{match_id: paper.match_id}})
-        ON CREATE SET {set_clause} ON MATCH SET {set_clause}
-        MERGE (run)-[:{RelationshipType.ADDED.value}]->(n)
-        """
-
-        # batch insert
-        with self._driver.session() as session:
-            session.run(query, run_id=run_id,
-                        papers=[{'match_id': node.match_id, **node.required_properties, **node.properties} for node in
-                                paper_nodes])
-
-    def insert_citation_papers(self, source_title: str, citations: List[Dict[str, str]]) -> None:
-        """
-        Batch insert a list of citation papers found by grobid
-
-        todo - cleanup
-
-        :param source_title: Title of paper that cites these papers
-        :param citations: List of paper properties
-        """
-        # ensure open connection
-        if not self._driver:
-            raise RuntimeError("Database driver is not initialized")
-
-        # convert to nodes
-        paper_nodes: List[Node] = [Node.create(NodeType.PAPER, props) for props in citations]
-
-        # add properties
-        set_expressions = set()
-        all_props = set()
-        if paper_nodes[0].required_properties:
-            all_props.update(paper_nodes[0].required_properties)
-        if paper_nodes[0].properties:
-            all_props.update(paper_nodes[0].properties)
-
-        # build the SET expressions
-        set_expressions.update([f"n.{k} = coalesce(n.{k}, paper.{k})" for k in all_props])
-        set_clause = ", ".join(set_expressions)
+        query_body = _format_paper_batch_insert_query(paper_nodes)
 
         # construct the final query
         query = f"""
-        MERGE (source:{NodeType.PAPER.value} {{id: $source_id}})
+        MERGE (source:{source_node.type.value} {{match_id: $match_id}})
         WITH source
-        UNWIND $papers AS paper
-        MERGE (n:{NodeType.PAPER.value} {{match_id: paper.match_id}})
-        ON CREATE SET {set_clause} ON MATCH SET {set_clause}
-        MERGE (source)-[:{RelationshipType.REFERENCES.value}]->(n)
+        {query_body}
+        MERGE (source)-[:{rel_type.value}]->(n)
         """
 
         # batch insert
         with self._driver.session() as session:
             session.run(query,
-                        source_id=source_title,
-                        papers=[{'match_id': node.match_id, **node.required_properties, **node.properties} for node in
-                                paper_nodes])
+                        match_id=source_node.match_id,
+                        papers=[{'match_id': node.match_id, **node.required_properties, **node.properties}
+                                for node in paper_nodes])
 
     def get_all_unprocessed_pdf_urls(self) -> List[Tuple[str, str]]:
         """
@@ -299,3 +270,30 @@ def _is_model_local(embedding_model: str) -> bool:
     cache_dir = os.path.expanduser(f"~/{SENTENCE_TRANSFORMER_CACHE}")
     model_path = os.path.join(cache_dir, f"models--sentence-transformers--{embedding_model}")
     return os.path.exists(model_path)
+
+
+def _format_paper_batch_insert_query(paper_nodes: List[Node]) -> str:
+    """
+    Format a list node paper nodes into cypher unwind query
+
+    :param paper_nodes: List of paper nodes to add
+    :return: UNWIND cypher query
+    """
+    # add properties
+    all_props = set()
+    if paper_nodes[0].required_properties:
+        all_props.update(paper_nodes[0].required_properties)
+    if paper_nodes[0].properties:
+        all_props.update(paper_nodes[0].properties)
+
+    # build the SET expressions
+    set_expressions = {f"n.{k} = coalesce(n.{k}, paper.{k})" for k in all_props}
+    set_clause = ", ".join(set_expressions)
+
+    # construct the formatted query
+    return f"""
+        UNWIND $papers AS paper
+        MERGE (n:{NodeType.PAPER.value} {{match_id: paper.match_id}})
+        ON CREATE SET {set_clause} 
+        ON MATCH SET {set_clause}
+        """
