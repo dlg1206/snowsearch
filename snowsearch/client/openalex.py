@@ -87,7 +87,7 @@ class OpenAlexClient:
         with open(NL_TO_QUERY_CONTEXT_FILE, 'r') as f:
             self._nl_to_query_context = f.read()
 
-    def _add_auth(self, params_obj: Dict[str, str]) -> None:
+    def _add_auth(self, params_obj: Dict[str, str | int]) -> None:
         """
         Add email and / or api key to params if present
 
@@ -118,16 +118,16 @@ class OpenAlexClient:
             result = await response.json()
         return int(result['meta']['count'])
 
-    async def _fetch_papers(self, session: ClientSession, query: str, cursor: str = '*') -> Tuple[
+    async def _fetch_page(self, session: ClientSession, query: str, cursor: str = '*') -> Tuple[
         str | None, List[OpenAlexDTO]]:
         """
-        Search for exact title match from OpenAlex
+        Search for query from OpenAlex
 
         :param session: HTTP session to use
         :param query: Query string to use
         :param cursor: Cursor to use for pagination (Default: starting cursor)
         https://docs.openalex.org/how-to-use-the-api/get-lists-of-entities/paging?q=per_page#cursor-paging
-        :return: Next cursor and list of papers
+        :return: Cursor for next page and list of papers
         """
         params = {'filter': f"title_and_abstract.search:{query}", 'cursor': cursor, 'per_page': MAX_PER_PAGE}
         self._add_auth(params)
@@ -144,6 +144,31 @@ class OpenAlexClient:
             OpenAlexDTO(p['id'], p['title'], p['doi'], bool(p['open_access']['is_oa']), p['open_access']['oa_url'])
             for p in result.get('results', [])
         ]
+
+    async def _fetch_by_doi(self, session: ClientSession, doi: str) -> OpenAlexDTO | None:
+        """
+        Fetch paper from OpenAlex by DOI
+
+        :param session: HTTP session to use
+        :param doi: DOI identifier to search for
+        :return: Matching OpenAlex paper, None if no matches
+        """
+        params = {'per_page': 1}
+        self._add_auth(params)
+        # block to respect rate limit
+        await asyncio.sleep(RATE_LIMIT_SLEEP)
+        # make the request
+        async with session.get(f"{OPENALEX_ENDPOINT}/works/{DOI_PREFIX}{doi}", params=params) as response:
+            logger.debug_msg(f"Querying '{response.url}'")
+            response.raise_for_status()
+            result = await response.json()
+        # return none if no hits
+        if not result['meta']['count']:
+            return None
+        # else parse results
+        paper = result['results'][0]
+        return OpenAlexDTO(paper['id'], paper['title'], doi, bool(paper['open_access']['is_oa']),
+                           paper['open_access']['oa_url'])
 
     def prompt_to_query(self, prompt: str) -> str:
         """
@@ -200,7 +225,7 @@ class OpenAlexClient:
             while True:
                 try:
                     # save results
-                    next_cursor, papers = await self._fetch_papers(session, query, next_cursor)
+                    next_cursor, papers = await self._fetch_page(session, query, next_cursor)
                     paper_db.insert_run_paper_batch(run_id, [p.to_properties() for p in papers])
                     # no pages left
                     if not next_cursor:

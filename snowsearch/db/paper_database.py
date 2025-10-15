@@ -250,22 +250,25 @@ class PaperDatabase(Neo4jDatabase):
         query = f"""
             MATCH (p:{NodeType.PAPER.value}) 
             WHERE p.pdf_url IS NOT NULL 
-            AND p.grobid_status IS NULL 
+            p.download_status IS NULL AND p.grobid_status IS NULL 
             AND p.is_open_access 
             RETURN p.id AS id, p.pdf_url AS pdf_url
             """
-        # todo - add time filters
+        # todo - add time filter
         with self._driver.session() as session:
             results = session.run(query)
             return [(r['id'], r['pdf_url']) for r in results]
 
-    def get_similar_papers(self, prompt: str, top_k: int = 100, min_score: float = None) -> List[Dict[str, str | int]]:
+    def search_by_prompt_papers(self, prompt: str, paper_limit: int = 100, min_score: float = None) -> List[
+        Dict[str, str | int]]:
         """
         Get papers with abstracts that best match the prompt
+        The similarity score can range from 1 (exact match) and -1 (complete opposite match)
 
         :param prompt: Search prompt
-        :param top_k: Top papers to return (Default: 100)
-        :param min_score: Minimum similarity score of prompt to abstract (Default: None but 0.4 recommended)
+        :param paper_limit: Limit the max number of papers to return (Default: 100)
+        :param min_score: Minimum similarity score of prompt to abstract, must be [-1,1] (Default: None but 0.4 recommended)
+        :raises ValueError: If provided min_score is outside [-1,1] range
         :return: List of top_k paper titles that best match the given prompt and their score
         """
         # validate min score
@@ -284,7 +287,7 @@ class PaperDatabase(Neo4jDatabase):
         ORDER BY score DESC
         """
         # set params
-        params: Dict[str, Any] = {'topK': top_k, 'embedding': prompt_embedding}
+        params: Dict[str, Any] = {'topK': paper_limit, 'embedding': prompt_embedding}
         if min_score:
             params['minScore'] = min_score
         # exe query
