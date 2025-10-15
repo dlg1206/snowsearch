@@ -259,28 +259,59 @@ class PaperDatabase(Neo4jDatabase):
             results = session.run(query)
             return [(r['id'], r['pdf_url']) for r in results]
 
-    def get_similar_papers(self, prompt: str, top_k: int) -> List[str]:
+    def get_similar_papers(self, prompt: str, top_k: int = None) -> List[str]:
         """
         Get papers with abstracts that best match the prompt
 
         :param prompt: Search prompt
-        :param top_k: Top papers to return
+        :param top_k: Top papers to return (Default: All)
         :return: List of top_k paper titles that best match the given prompt
         """
         prompt_embedding = self._embedding_model.encode(prompt, show_progress_bar=False).tolist()
-        query = """
+        query = f"""
         CALL db.index.vector.queryNodes(
-          'paper_abstract_index',
-          $topK,
+          'paper_abstract_index', {'$topK' if top_k else ''}
           $embedding
         ) YIELD node, score
         WHERE node.grobid_status = 200
         RETURN node.id AS id
         ORDER BY score DESC
         """
+        # set params
+        params: Dict[str, Any] = {'embedding': prompt_embedding}
+        if top_k:
+            params['topK'] = top_k
+        # exe query
         with self._driver.session() as session:
-            results = session.run(query, topK=top_k, embedding=prompt_embedding)
+            results = session.run(query, **params)
             return [r['id'] for r in results]
+
+    def get_unprocessed_citations(self, source_title: str, top_k: int = None) -> List[Dict[str, str]]:
+        """
+        Get the most referenced citations for a given paper
+
+        :param source_title: Title of paper that cites these papers
+        :param top_k: Number of unprocessed citations to get, ranked total number of references (Default: All)
+        :return: List of citation title, doi, and current citation count
+        """
+        query = f"""
+        MATCH (s:{NodeType.PAPER.value})-[:{RelationshipType.REFERENCES.value}]->(c:{NodeType.PAPER.value})
+        WHERE s.id = $source_title
+        WITH c
+        MATCH (any_paper:{NodeType.PAPER.value})-[:{RelationshipType.REFERENCES.value}]->(c)
+        WHERE c.download_status IS NULL
+        RETURN c.id AS id, c.doi AS doi, count(any_paper) AS citations
+        ORDER BY citations DESC
+        {'LIMIT $topK' if top_k else ''}
+        """
+        # set params
+        params: Dict[str, Any] = {'source_title': source_title}
+        if top_k:
+            params['topK'] = top_k
+        # exe query
+        with self._driver.session() as session:
+            results = session.run(query, **params)
+            return [{'id': r['id'], 'doi': r['doi'], 'citations': r['citations']} for r in results]
 
 
 def _is_model_local(embedding_model: str) -> bool:
