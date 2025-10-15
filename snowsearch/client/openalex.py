@@ -3,7 +3,7 @@ import dataclasses
 import os
 import re
 from datetime import datetime
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Any
 
 from aiohttp import ClientSession
 
@@ -31,7 +31,7 @@ QUERY_JSON_RE = re.compile(r'\{\n.*"query": "(.*?)"')
 # attempts to generate OpenAlex query
 MAX_RETRIES = 3
 
-OPENALEX_ENDPOINT = "https://api.openalex.org"
+OPENALEX_BASE = "https://api.openalex.org"
 OPENALEX_PREFIX = "https://openalex.org/"
 
 
@@ -100,23 +100,22 @@ class OpenAlexClient:
         if self._api_key_available:
             params_obj['api_key'] = os.getenv('OPENALEX_API_KEY')
 
-    async def _fetch_paper_count(self, session: ClientSession, query: str) -> int:
-        """
-        Get the number of papers that match the given query
-
-        :param session: HTTP session to use
-        :param query: Query string to use
-        :return: Number of papers the query matches
-        """
-        params = {'filter': f"title_and_abstract.search:{query}", 'per_page': 1}
+    async def _fetch(self, session: ClientSession, openalex_endpoint: str, params: Dict[str, str | int] = None,
+                     per_page: int = MAX_PER_PAGE) -> Dict[str, Any]:
+        # init paramas if dne
+        if not params:
+            params = dict()
+        # update params
         self._add_auth(params)
+        params['per_page'] = per_page
+        # block to respect rate limit
         await asyncio.sleep(RATE_LIMIT_SLEEP)
         # make the request
-        async with session.get(f"{OPENALEX_ENDPOINT}/works", params=params) as response:
-            logger.debug_msg(f"Querying '{response.url}'")
+        url = f"{OPENALEX_BASE}/{openalex_endpoint}"
+        logger.debug_msg(f"Querying '{url}'")
+        async with session.get(url, params=params) as response:
             response.raise_for_status()
-            result = await response.json()
-        return int(result['meta']['count'])
+            return await response.json()
 
     async def _fetch_page(self, session: ClientSession, query: str, cursor: str = '*') -> Tuple[
         str | None, List[OpenAlexDTO]]:
@@ -129,21 +128,26 @@ class OpenAlexClient:
         https://docs.openalex.org/how-to-use-the-api/get-lists-of-entities/paging?q=per_page#cursor-paging
         :return: Cursor for next page and list of papers
         """
-        params = {'filter': f"title_and_abstract.search:{query}", 'cursor': cursor, 'per_page': MAX_PER_PAGE}
-        self._add_auth(params)
-        # block to respect rate limit
-        await asyncio.sleep(RATE_LIMIT_SLEEP)
-        # make the request
-        async with session.get(f"{OPENALEX_ENDPOINT}/works", params=params) as response:
-            logger.debug_msg(f"Querying '{response.url}'")
-            response.raise_for_status()
-            result = await response.json()
+        # fetch papers
+        params = {'filter': f"title_and_abstract.search:{query}", 'cursor': cursor}
+        result = await self._fetch(session, "/works", params)
 
         # parse findings
         return result['meta']['next_cursor'], [
             OpenAlexDTO(p['id'], p['title'], p['doi'], bool(p['open_access']['is_oa']), p['open_access']['oa_url'])
             for p in result.get('results', [])
         ]
+
+    async def _fetch_paper_count(self, session: ClientSession, query: str) -> int:
+        """
+        Get the number of papers that match the given query
+
+        :param session: HTTP session to use
+        :param query: Query string to use
+        :return: Number of papers the query matches
+        """
+        result = await self._fetch(session, "/works", {'filter': f"title_and_abstract.search:{query}"}, 1)
+        return int(result['meta']['count'])
 
     async def _fetch_by_doi(self, session: ClientSession, doi: str) -> OpenAlexDTO | None:
         """
@@ -153,21 +157,41 @@ class OpenAlexClient:
         :param doi: DOI identifier to search for
         :return: Matching OpenAlex paper, None if no matches
         """
-        params = {'per_page': 1}
-        self._add_auth(params)
-        # block to respect rate limit
-        await asyncio.sleep(RATE_LIMIT_SLEEP)
-        # make the request
-        async with session.get(f"{OPENALEX_ENDPOINT}/works/{DOI_PREFIX}{doi}", params=params) as response:
-            logger.debug_msg(f"Querying '{response.url}'")
-            response.raise_for_status()
-            result = await response.json()
+        # make request
+        result = await self._fetch(session, f"/works/{DOI_PREFIX}{doi}", per_page=1)
+
         # return none if no hits
         if not result['meta']['count']:
             return None
         # else parse results
         paper = result['results'][0]
         return OpenAlexDTO(paper['id'], paper['title'], doi, bool(paper['open_access']['is_oa']),
+                           paper['open_access']['oa_url'])
+
+    async def _fetch_by_exact_title(self, session: ClientSession, title: str) -> OpenAlexDTO | None:
+        """
+        Fetch paper from OpenAlex by exact title match
+
+        :param session: HTTP session to use
+        :param title: Title of paper to search for
+        :return: Matching OpenAlex paper, None if no matches
+        """
+        # make request
+        # remove commas since aren't supported in search
+        # https://github.com/ropensci/openalexR/issues/254
+        result = await self._fetch(session,
+                                   f"/works", {'filter': f"title_and_abstract.search:{title.replace(',', ' ')}"},
+                                   1)
+
+        # return none if no hits
+        if not result['meta']['count']:
+            return None
+        # else parse results
+        paper = result['results'][0]
+        # not exact match
+        if paper['title'] != title:
+            return None
+        return OpenAlexDTO(paper['id'], paper['title'], paper['doi'], bool(paper['open_access']['is_oa']),
                            paper['open_access']['oa_url'])
 
     def prompt_to_query(self, prompt: str) -> str:
