@@ -120,12 +120,13 @@ class Neo4jDatabase(ABC):
             result = session.run(query, node_id=node_id)
             return result.single()["exists"]
 
-    def insert_node(self, node: Node, upsert: bool = False) -> bool:
+    def insert_node(self, node: Node, update: bool = False, replace: bool = False) -> bool:
         """
         Insert a node into the neo4j database
 
         :param node: Node to insert into the database
-        :param upsert: Update the data if match is found (Default: False)
+        :param update: Update the data if match is found (Default: False)
+        :param replace: If updating, replace existing data (Default: False)
         :raises RuntimeError: If attempt to insert using a closed connection
         :return True if inserted or updated, False if not
         """
@@ -133,28 +134,25 @@ class Neo4jDatabase(ABC):
         if not self._driver:
             raise RuntimeError("Database driver is not initialized")
 
-        # query = f"{'MERGE' if upsert else 'CREATE'} (n:{node.type.value}"
         # always use match id
-        query = f"{'MERGE' if upsert else 'CREATE'} (n:{node.type.value} {{match_id: '{node.match_id}'}})"
-        # add constraints
-        # if node.required_properties:
-        #     # append keys
-        #     composite_key = "{" + ", ".join([f"{k}: ${k}" for k in node.required_properties]) + "}"
-        #     query += f" {composite_key})"
-        # else:
-        #     query += ")"
+        query = f"{'MERGE' if update else 'CREATE'} (n:{node.type.value} {{match_id: '{node.match_id}'}})"
+
         # add properties
         set_expressions = set()
+        # replace value if set
+        statement = "n.{k} = ${k}" if replace else "n.{k} = coalesce(n.{k}, ${k})"
+        all_props = set()
         if node.required_properties:
-            set_expressions.update([f"n.{k} = ${k}" for k in node.required_properties])
+            all_props.update(node.required_properties)
         if node.properties:
-            set_expressions.update([f"n.{k} = ${k}" for k in node.properties])
+            all_props.update(node.properties)
 
+        # build the SET expressions
+        set_expressions.update([statement.format(k=k) for k in all_props])
         set_clause = ", ".join(set_expressions)
-        if upsert:
-            query = f"{query} ON CREATE SET {set_clause} ON MATCH SET {set_clause}"
-        else:
-            query = f"{query} SET {set_clause}"
+
+        # construct the final query
+        query = f"{query} ON CREATE SET {set_clause} ON MATCH SET {set_clause}" if update else f"{query} SET {set_clause}"
 
         # execute query
         for attempt in range(MAX_ATTEMPTS):

@@ -1,7 +1,7 @@
 import os
 import warnings
 from datetime import datetime
-from typing import Dict, List
+from typing import Dict, List, Tuple, Any
 
 from sentence_transformers import SentenceTransformer
 
@@ -10,13 +10,13 @@ from db.entity import Node, NodeType, RelationshipType
 from util.logger import logger
 from util.timer import Timer
 
-"""
+"""`
 File: paper_database.py
 
 Description: Specialized interface for abstracting Neo4j commands to the database
 
 @author Derek Garcia
-"""
+`"""
 
 # embedding model details
 DEFAULT_EMBEDDING_MODEL = "all-MiniLM-L6-v2"
@@ -124,61 +124,99 @@ class PaperDatabase(Neo4jDatabase):
         })
         self.insert_node(run_node, True)
 
-    def insert_new_paper(self, run_id: int, title: str) -> None:
-        """
-        Insert a paper into the database
-
-        :param run_id: ID of run paper found
-        :param title: Title of paper
-        """
-        # # add paper
-        # abstract_embedding = self._embedding_model.encode(abstract, show_progress_bar=False).tolist()
-        paper_node = Node.create(NodeType.PAPER, {
-            'id': title,
-            'time_added': datetime.now()
-        })
-        self.insert_node(paper_node)
-
-        # add relationship to current run
-        run_node = Node.create(NodeType.RUN, {'id': run_id})
-        self.insert_relationship(run_node,
-                                 run_node.create_relationship_to(paper_node.type, RelationshipType.ADDED),
-                                 paper_node)
-
-    def update_paper(self,
-                     title: str,
-                     open_alex_id: str = None,
+    def upsert_paper(self, title: str,
+                     run_id: int = None,
+                     openalex_id: str = None,
                      doi: str = None,
+                     abstract_text: str = None,
                      is_open_access: bool = None,
-                     pdf_url: str = None) -> None:
+                     pdf_url: str = None,
+                     download_status: int = None,
+                     download_error_msg: str = None,
+                     grobid_status: int = None,
+                     grobid_error_msg: str = None,
+                     time_grobid_processed: datetime = None,
+                     time_added: datetime = None) -> None:
         """
-        Update paper fields. Only provided fields will be updated
+        Insert paper into database and optional details
 
-        :param title: Title of paper
-        :param open_alex_id: OpenAlex work ID
+        :param title: Title of paper (key)
+        :param run_id: ID of run
+        :param openalex_id: OpenAlex Work ID
         :param doi: DOI of paper
-        :param is_open_access: Is the paper open access?
-        :param pdf_url: URL of downloadable PDF
+        :param abstract_text: Abstract of paper
+        :param is_open_access: Is paper open access yet
+        :param pdf_url: URL of paper pdf
+        :param download_status: HTTP status of download
+        :param download_error_msg: Error message for download
+        :param grobid_status: HTTP status of grobid process
+        :param grobid_error_msg: Error message for grobid
+        :param time_grobid_processed: Time processed with grobid
+        :param time_added: Time initially added
         """
-        # set properties
-        properties: Dict[str, str | bool | datetime] = {'id': title}
-        # if open_alex_id:
-        #     properties['openalex_id'] = open_alex_id.removeprefix(OPENALEX_PREFIX)
-        if doi:
-            properties['doi'] = doi.removeprefix(DOI_PREFIX)
-        if is_open_access is not None:
-            properties['is_open_access'] = is_open_access
-        if pdf_url:
-            properties['pdf_url'] = pdf_url
-        # update node
-        self.insert_node(Node.create(NodeType.PAPER, properties), True)
+        # add properties
+        properties: Dict[str, Any] = {
+            'id': title,
+            'openalex_id': openalex_id,
+            'doi': doi,
+            'abstract_text': abstract_text,
+            'is_open_access': is_open_access,
+            'pdf_url': pdf_url,
+            'download_status': download_status,
+            'download_error_msg': download_error_msg,
+            'grobid_status': grobid_status,
+            'grobid_error_msg': grobid_error_msg,
+            'time_grobid_processed': time_grobid_processed,
+            'time_added': time_added
+        }
 
-    def insert_paper_batch(self, run_id: int, paper_properties: List[Dict[str, str]]) -> None:
+        # calculate embedding if abstract available
+        if abstract_text:
+            abstract_embedding = self._embedding_model.encode(abstract_text, show_progress_bar=False).tolist()
+            properties['abstract_embedding'] = abstract_embedding
+
+        # insert node
+        paper_node = Node.create(NodeType.PAPER, properties)
+        is_new_node = self.insert_node(paper_node, True)  # update matches, don't replace existing fields
+
+        # add relationship to current run if new node and run id provided
+        if run_id and is_new_node:
+            run_node = Node.create(NodeType.RUN, {'id': run_id})
+            self.insert_relationship(run_node,
+                                     run_node.create_relationship_to(paper_node.type, RelationshipType.ADDED),
+                                     paper_node)
+
+    def insert_run_paper_batch(self, run_id: int, paper_properties: List[Dict[str, str]]) -> None:
         """
-        Insert a batch of papers into the database
+        Insert a batch of papers found by an OpenAlex run
 
         :param run_id: ID of run this batch of papers was found in
-        :param paper_properties: Node properties
+        :param paper_properties: List of paper properties
+        """
+        # wrapper to keep relationship logic internal
+        self._insert_paper_batch(Node.create(NodeType.RUN, {'id': run_id}), RelationshipType.ADDED, paper_properties)
+
+    def insert_citation_paper_batch(self, source_title: str, paper_properties: List[Dict[str, str]]) -> None:
+        """
+        Insert a batch of papers cited by a source paper
+
+        :param source_title: Title of paper that cites these papers
+        :param paper_properties: List of paper properties
+        """
+        # wrapper to keep relationship logic internal
+        self._insert_paper_batch(Node.create(NodeType.PAPER, {'id': source_title}), RelationshipType.REFERENCES,
+                                 paper_properties)
+
+    def _insert_paper_batch(self,
+                            source_node: Node,
+                            rel_type: RelationshipType,
+                            paper_properties: List[Dict[str, str]]) -> None:
+        """
+        Batch insert a list of papers found by a source
+
+        :param source_node: Source node that found this batch of papers
+        :param rel_type: Relationship of source node to batch
+        :param paper_properties: List of paper properties of the batch
         """
         # ensure open connection
         if not self._driver:
@@ -186,28 +224,40 @@ class PaperDatabase(Neo4jDatabase):
 
         # convert to nodes
         paper_nodes: List[Node] = [Node.create(NodeType.PAPER, props) for props in paper_properties]
+        query_body = _format_paper_batch_insert_query(paper_nodes)
 
-        # add properties
-        set_expressions = set()
-        if paper_nodes[0].required_properties:
-            set_expressions.update([f"n.{k} = paper.{k}" for k in paper_nodes[0].required_properties])
-        if paper_nodes[0].properties:
-            set_expressions.update([f"n.{k} = paper.{k}" for k in paper_nodes[0].properties])
-
-        set_clause = ", ".join(set_expressions)
+        # construct the final query
         query = f"""
-        MERGE (run:{NodeType.RUN.value} {{id: $run_id}})
-        WITH run
-        UNWIND $papers AS paper
-        MERGE (n:{NodeType.PAPER.value} {{match_id: paper.match_id}})
-        ON CREATE SET {set_clause} ON MATCH SET {set_clause}
-        MERGE (run)-[:{RelationshipType.ADDED.value}]->(n)
+        MERGE (source:{source_node.type.value} {{match_id: $match_id}})
+        WITH source
+        {query_body}
+        MERGE (source)-[:{rel_type.value}]->(n)
         """
 
         # batch insert
         with self._driver.session() as session:
-            session.run(query, run_id=run_id, papers=[{'match_id': node.match_id, **node.required_properties, **node.properties} for node in paper_nodes])
+            session.run(query,
+                        match_id=source_node.match_id,
+                        papers=[{'match_id': node.match_id, **node.required_properties, **node.properties}
+                                for node in paper_nodes])
 
+    def get_all_unprocessed_pdf_urls(self) -> List[Tuple[str, str]]:
+        """
+        Get all papers with pdfs that haven't been processed by grobid yet
+
+        :return: List of paper titles and pdf urls
+        """
+        query = f"""
+            MATCH (p:{NodeType.PAPER.value}) 
+            WHERE p.pdf_url IS NOT NULL 
+            AND p.grobid_status IS NULL 
+            AND p.is_open_access 
+            RETURN p.id AS id, p.pdf_url AS pdf_url
+            """
+        # todo - add time filters
+        with self._driver.session() as session:
+            results = session.run(query)
+            return [(r['id'], r['pdf_url']) for r in results]
 
 
 def _is_model_local(embedding_model: str) -> bool:
@@ -220,3 +270,30 @@ def _is_model_local(embedding_model: str) -> bool:
     cache_dir = os.path.expanduser(f"~/{SENTENCE_TRANSFORMER_CACHE}")
     model_path = os.path.join(cache_dir, f"models--sentence-transformers--{embedding_model}")
     return os.path.exists(model_path)
+
+
+def _format_paper_batch_insert_query(paper_nodes: List[Node]) -> str:
+    """
+    Format a list node paper nodes into cypher unwind query
+
+    :param paper_nodes: List of paper nodes to add
+    :return: UNWIND cypher query
+    """
+    # add properties
+    all_props = set()
+    if paper_nodes[0].required_properties:
+        all_props.update(paper_nodes[0].required_properties)
+    if paper_nodes[0].properties:
+        all_props.update(paper_nodes[0].properties)
+
+    # build the SET expressions
+    set_expressions = {f"n.{k} = coalesce(n.{k}, paper.{k})" for k in all_props}
+    set_clause = ", ".join(set_expressions)
+
+    # construct the formatted query
+    return f"""
+        UNWIND $papers AS paper
+        MERGE (n:{NodeType.PAPER.value} {{match_id: paper.match_id}})
+        ON CREATE SET {set_clause} 
+        ON MATCH SET {set_clause}
+        """

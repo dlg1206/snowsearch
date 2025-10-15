@@ -30,6 +30,11 @@ nodes:
       - "abstract_embedding"
       - "is_open_access"
       - "pdf_url"
+      - "download_status"
+      - "download_error_msg"
+      - "grobid_status"
+      - "grobid_error_msg"
+      - "time_grobid_processed"
       - "time_added"
     relationships:
       # This paper added this paper (during snowballing)
