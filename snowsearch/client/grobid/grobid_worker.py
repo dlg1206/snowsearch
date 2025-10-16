@@ -3,7 +3,7 @@ import logging
 from asyncio import Semaphore
 from datetime import datetime
 from tempfile import NamedTemporaryFile, TemporaryDirectory
-from typing import List, Tuple, Dict, Any, Callable, Coroutine
+from typing import List, Dict, Any, Callable, Coroutine
 
 import grobid_tei_xml
 from aiohttp import ClientSession, ClientResponseError
@@ -12,6 +12,7 @@ from grobid_client.grobid_client import GrobidClient
 from client.grobid.config import MAX_CONCURRENT_DOWNLOADS, MAX_PDF_COUNT, KILOBYTE, DOWNLOAD_HEADERS, MAX_RETRIES
 from client.grobid.dto import GrobidDTO, CitationDTO
 from client.grobid.exception import PaperDownloadError, GrobidProcessError
+from client.openalex.dto import PaperDTO
 from db.paper_database import PaperDatabase
 from util.logger import logger
 from util.timer import Timer
@@ -42,7 +43,7 @@ class GrobidWorker:
         self._download_semaphore = Semaphore(MAX_CONCURRENT_DOWNLOADS)  # todo config to handle max requests at one time
         self._pdf_file_semaphore = Semaphore(MAX_PDF_COUNT)  # todo config to handle max requests at one time
 
-    async def _download_pdf(self, session: ClientSession, title: str, pdf_url: str, output_path: str):
+    async def _download_pdf(self, session: ClientSession, title: str, pdf_url: str, output_path: str) -> None:
         """
         Download pdf to file
 
@@ -112,7 +113,7 @@ class GrobidWorker:
 
         return GrobidDTO(title, doc.abstract, [CitationDTO(c.title, c.doi) for c in doc.citations])
 
-    async def process_papers(self, paper_db: PaperDatabase, papers: List[Tuple[str, str]]):
+    async def process_papers(self, paper_db: PaperDatabase, papers: List[PaperDTO]):
         """
         Process a list of papers and save them to the database
 
@@ -128,42 +129,45 @@ class GrobidWorker:
         with TemporaryDirectory(prefix='grobid-') as work_dir:
             async with ClientSession() as session:
                 # queue tasks
-                tasks = [self._process_paper_task(session, work_dir, t, p) for t, p in papers]
+                tasks = [self._process_paper_task(session, work_dir, p.id, p.pdf_url) for p in papers]
                 logger.debug_msg(f"Processing {len(papers)} papers")
                 # save results as complete
                 for future in logger.get_data_queue(tasks, "Processing papers", "papers", is_async=True):
                     try:
                         result: GrobidDTO = await future
                         # update abstract
-                        paper_db.upsert_paper(result.title,
-                                              abstract_text=result.abstract,
-                                              download_status=200,
-                                              grobid_status=200,
-                                              time_grobid_processed=datetime.now())
-                        # add referenced papers
+                        paper_db.upsert_paper(PaperDTO(result.id,
+                                                       abstract_text=result.abstract,
+                                                       download_status=200,
+                                                       grobid_status=200,
+                                                       time_grobid_processed=datetime.now()))
+                        # add referenced papers, if any
+                        new_papers = []
                         if result.citations:
-                            paper_properties = []
                             for c in result.citations:
-                                paper_properties.append({'id': c.title, 'doi': c.doi, 'time_added': datetime.now()})
-                                citations.add(c.title)
-                            paper_db.insert_citation_paper_batch(result.title, paper_properties)
+                                new_papers.append(PaperDTO(c.id, doi=c.doi, time_added=datetime.now()))
+                                citations.add(c)
+                            paper_db.insert_citation_paper_batch(result.id, new_papers)
 
                         num_success += 1
+
                     # failed to download pdf
                     except PaperDownloadError as e:
                         logger.error_exp(e)
-                        paper_db.upsert_paper(e.paper_title, download_status=e.status_code,
-                                              download_error_msg=e.error_msg)
+                        paper_db.upsert_paper(
+                            PaperDTO(e.paper_title, download_status=e.status_code, download_error_msg=e.error_msg))
                         num_fail_download += 1
                     # failed to parse pdf
                     except GrobidProcessError as e:
                         logger.error_exp(e)
-                        paper_db.upsert_paper(e.paper_title, grobid_status=e.status_code, grobid_error_msg=e.error_msg)
+                        paper_db.upsert_paper(
+                            PaperDTO(e.paper_title, grobid_status=e.status_code, grobid_error_msg=e.error_msg))
                         num_fail_process += 1
                     # misc exception
                     except Exception as e:
                         logger.error_exp(e)
                         num_misc_error += 1
+
         # report results
         percent = lambda a, b: f"{(a / b) * 100:.01f}%"
         logger.info(
@@ -173,7 +177,8 @@ class GrobidWorker:
         logger.info(f"Failed to process {num_fail_process} papers ({percent(num_fail_process, len(papers))})")
 
 
-async def _retry_wrapper(callback: Callable[[], Coroutine[Any, Any, Any]], retries: int = MAX_RETRIES,
+async def _retry_wrapper(callback: Callable[[], Coroutine[Any, Any, Any]],
+                         retries: int = MAX_RETRIES,
                          backoff: float = 0.0) -> Any:
     """
     Util method to wrap retry logic

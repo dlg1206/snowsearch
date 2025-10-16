@@ -7,6 +7,7 @@ from aiohttp import ClientSession, ClientResponseError
 from yarl import URL
 
 from client.ai.model import ModelClient
+from client.grobid.dto import CitationDTO
 from client.openalex.config import POLITE_RATE_LIMIT_SLEEP, DEFAULT_RATE_LIMIT_SLEEP, MAX_PER_PAGE, OPENALEX_BASE, \
     QUERY_JSON_RE, MAX_RETRIES, NL_TO_QUERY_CONTEXT_FILE
 from client.openalex.dto import PaperDTO
@@ -62,8 +63,19 @@ class OpenAlexClient:
         if self._api_key_available:
             params_obj['api_key'] = os.getenv('OPENALEX_API_KEY')
 
-    async def _fetch(self, session: ClientSession, openalex_endpoint: str, params: Dict[str, str | int] = None,
+    async def _fetch(self, session: ClientSession,
+                     openalex_endpoint: str,
+                     params: Dict[str, str | int] = None,
                      per_page: int = MAX_PER_PAGE) -> Dict[str, Any]:
+        """
+        Fetch data from openalex api
+
+        :param session: HTTP session to use
+        :param openalex_endpoint: Endpoint to query
+        :param params: Optional additional url params to include (Default: None)
+        :param per_page: Number of results to fetch per page (Default: 200)
+        :return: JSON response
+        """
         # init params if dne
         if not params:
             params = dict()
@@ -80,8 +92,7 @@ class OpenAlexClient:
             response.raise_for_status()
             return await response.json()
 
-    async def _fetch_page(self, session: ClientSession, query: str, cursor: str = '*') -> Tuple[
-        str | None, List[PaperDTO]]:
+    async def _fetch_page(self, session: ClientSession, query: str, cursor: str = '*') -> Tuple[str, List[PaperDTO]]:
         """
         Search for query from OpenAlex
 
@@ -97,7 +108,11 @@ class OpenAlexClient:
 
         # parse findings
         return result['meta']['next_cursor'], [
-            PaperDTO(p['id'], p['title'], p['doi'], bool(p['open_access']['is_oa']), p['open_access']['oa_url'])
+            PaperDTO(p['title'],
+                     openalex_id=p['id'],
+                     doi=p['doi'],
+                     is_open_access=bool(p['open_access']['is_oa']),
+                     pdf_url=p['open_access']['oa_url'])
             for p in result.get('results', [])
         ]
 
@@ -124,8 +139,11 @@ class OpenAlexClient:
         try:
             paper = await self._fetch(session, f"works/{DOI_PREFIX}{doi}", per_page=1)
             # parse results
-            return PaperDTO(paper['id'], paper['title'], doi, bool(paper['open_access']['is_oa']),
-                            paper['open_access']['oa_url'])
+            return PaperDTO(paper['title'],
+                            openalex_id=paper['id'],
+                            doi=doi,
+                            is_open_access=bool(paper['open_access']['is_oa']),
+                            pdf_url=paper['open_access']['oa_url'])
         except ClientResponseError:
             # todo - assuming 404
             # return none if no hits
@@ -152,10 +170,13 @@ class OpenAlexClient:
         # else parse results
         paper = result['results'][0]
         # not exact match
-        if paper['title'] != title:
+        if paper['title'].lower() != title.lower():
             return None
-        return PaperDTO(paper['id'], paper['title'], paper['doi'], bool(paper['open_access']['is_oa']),
-                        paper['open_access']['oa_url'])
+        return PaperDTO(paper['title'],
+                        openalex_id=paper['id'],
+                        doi=paper['doi'],
+                        is_open_access=bool(paper['open_access']['is_oa']),
+                        pdf_url=paper['open_access']['oa_url'])
 
     async def _fetch_citation_task(self,
                                    semaphore: Semaphore,
@@ -185,7 +206,7 @@ class OpenAlexClient:
                 method = 'title'
         # return paper if found
         if paper:
-            logger.debug_msg(f"Found '{paper.title}' by {method}")
+            logger.debug_msg(f"Found '{paper.id}' by {method}")
             return paper
         # else raise error
         raise MissingOpenAlexEntryError(doi, title)
@@ -208,7 +229,8 @@ class OpenAlexClient:
                 try:
                     # save results
                     next_cursor, papers = await self._fetch_page(session, query, next_cursor)
-                    paper_db.insert_run_paper_batch(run_id, [p.to_properties() for p in papers])
+                    paper_db.insert_run_paper_batch(run_id, papers)
+                    break
                     # no pages left
                     if not next_cursor:
                         break
@@ -220,7 +242,7 @@ class OpenAlexClient:
                     if not isinstance(progress, int):
                         progress.update(MAX_PER_PAGE)
 
-    async def save_citation_papers(self, paper_db: PaperDatabase, citations: List[Dict[str, str | None]]) -> None:
+    async def save_citation_papers(self, paper_db: PaperDatabase, citations: List[CitationDTO]) -> None:
         """
         Fetch details for the given list of citations and save to database
 
@@ -233,16 +255,16 @@ class OpenAlexClient:
         logger.debug_msg(f"Searching for details for {len(citations)} citations")
         async with ClientSession() as session:
             # todo - bulk requests https://docs.openalex.org/api-guide-for-llms#bulk-lookup-by-dois
-            tasks = [self._fetch_citation_task(semaphore, session, c.get('doi'), c.get('id')) for c in citations]
+            tasks = [self._fetch_citation_task(semaphore, session, c.doi, c.id) for c in citations]
             for future in logger.get_data_queue(tasks, "Fetching citation details", "citation", is_async=True):
                 try:
-                    result: PaperDTO = await future
+                    paper: PaperDTO = await future
                     # update citation
-                    paper_db.upsert_paper(result.title, **result.to_properties(False))
+                    paper_db.upsert_paper(paper)
                     num_success += 1
                 except MissingOpenAlexEntryError as e:
                     logger.error_exp(e)
-                    paper_db.upsert_paper(e.title, openalex_status=404)
+                    paper_db.upsert_paper(PaperDTO(e.title, openalex_status=404))
                     num_missing += 1
                 except Exception as e:
                     # todo - handle exceed requests per day

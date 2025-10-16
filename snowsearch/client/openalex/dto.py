@@ -1,8 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Dict
 
-from client.openalex.config import OPENALEX_PREFIX
 from db.config import DOI_PREFIX
 
 """
@@ -16,20 +14,19 @@ Description: DTOs for OpenAlex
 @dataclass
 class PaperDTO:
     id: str
-    title: str
-    doi: str
-    is_open_access: bool
-    pdf_url: str
+    openalex_id: str = None
+    doi: str = None
+    abstract_text: str = None
+    is_open_access: bool = None
+    pdf_url: str = None
+    openalex_status: int = None
+    download_status: int = None
+    download_error_msg: str = None
+    grobid_status: int = None
+    grobid_error_msg: str = None
+    time_grobid_processed: datetime = None
+    time_added: datetime = None
 
-    def to_properties(self, with_id: bool = True) -> Dict[str, str | bool | datetime]:
-        props = {
-            'openalex_id': self.id.removeprefix(OPENALEX_PREFIX) if self.id else None,
-            'doi': self.doi.removeprefix(DOI_PREFIX) if self.doi else None,
-            'is_open_access': self.is_open_access,
-            'pdf_url': self.pdf_url,
-            'openalex_status': 200,
-            'time_added': datetime.now()
-        }
-        if with_id:
-            props['id'] = self.title
-        return props
+    def __post_init__(self):
+        if self.doi:
+            self.doi = self.doi.removeprefix(DOI_PREFIX)
