@@ -1,5 +1,4 @@
 import asyncio
-import dataclasses
 import logging
 from asyncio import Semaphore
 from datetime import datetime
@@ -10,12 +9,15 @@ import grobid_tei_xml
 from aiohttp import ClientSession, ClientResponseError
 from grobid_client.grobid_client import GrobidClient
 
+from client.grobid.config import MAX_CONCURRENT_DOWNLOADS, MAX_PDF_COUNT, KILOBYTE, DOWNLOAD_HEADERS, MAX_RETRIES
+from client.grobid.dto import GrobidDTO, CitationDTO
+from client.grobid.exception import PaperDownloadError, GrobidProcessError
 from db.paper_database import PaperDatabase
 from util.logger import logger
 from util.timer import Timer
 
 """
-File: grobid.py
+File: grobid_worker.py
 Description: 
 
 @author Derek Garcia
@@ -23,92 +25,6 @@ Description:
 
 # Mute grobid client logs
 logging.getLogger("grobid_client").setLevel(logging.CRITICAL)  # todo doesn't work
-
-# grobid server details
-DEFAULT_HOST = "localhost"
-DEFAULT_PORT = 8070
-# download details
-MAX_CONCURRENT_DOWNLOADS = 10  # todo add config option
-MAX_PDF_COUNT = 100  # max pdfs allowed to be downloaded at a time
-MAX_RETRIES = 3
-KILOBYTE = 1024
-
-DOWNLOAD_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:116.0) Gecko/20100101 Firefox/116.0",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-    "Accept-Language": "en-US,en;q=0.5",
-    "Accept-Encoding": "gzip, deflate, br",
-    "Connection": "keep-alive",
-    "Upgrade-Insecure-Requests": "1",
-    "TE": "Trailers"
-}
-
-
-@dataclasses.dataclass
-class CitationDTO:
-    title: str
-    doi: str
-
-
-@dataclasses.dataclass
-class GrobidDTO:
-    title: str
-    abstract: str
-    citations: List[CitationDTO]
-
-
-class PaperDownloadError(Exception):
-    def __init__(self, paper_title: str, status_code: int, error_msg: str):
-        """
-        Create new failure error
-
-        :param paper_title: Title of paper failed to process
-        :param status_code: Grobid server status code
-        :param error_msg: Grobid server error message
-        """
-        super().__init__(f"Failed to download '{paper_title}' | {status_code} | {error_msg}")
-        self._paper_title = paper_title
-        self._status_code = status_code
-        self._error_msg = error_msg
-
-    @property
-    def paper_title(self) -> str:
-        return self._paper_title
-
-    @property
-    def status_code(self) -> int:
-        return self._status_code
-
-    @property
-    def error_msg(self) -> str:
-        return self._error_msg
-
-
-class GrobidProcessError(Exception):
-    def __init__(self, paper_title: str, status_code: int, error_msg: str):
-        """
-        Create new failure error
-
-        :param paper_title: Title of paper failed to process
-        :param status_code: Grobid server status code
-        :param error_msg: Grobid server error message
-        """
-        super().__init__(f"Failed to process '{paper_title}' | {status_code} | {error_msg}")
-        self._paper_title = paper_title
-        self._status_code = status_code
-        self._error_msg = error_msg
-
-    @property
-    def paper_title(self) -> str:
-        return self._paper_title
-
-    @property
-    def status_code(self) -> int:
-        return self._status_code
-
-    @property
-    def error_msg(self) -> str:
-        return self._error_msg
 
 
 class GrobidWorker:

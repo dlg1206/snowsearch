@@ -5,6 +5,7 @@ from typing import Dict, List, Tuple, Any
 
 from sentence_transformers import SentenceTransformer
 
+from db.config import DEFAULT_EMBEDDING_MODEL, DEFAULT_DIMENSIONS, SENTENCE_TRANSFORMER_CACHE
 from db.database import Neo4jDatabase
 from db.entity import Node, NodeType, RelationshipType
 from util.logger import logger
@@ -17,13 +18,6 @@ Description: Specialized interface for abstracting Neo4j commands to the databas
 
 @author Derek Garcia
 `"""
-
-# embedding model details
-DEFAULT_EMBEDDING_MODEL = "all-MiniLM-L6-v2"
-DEFAULT_DIMENSIONS = 384
-SENTENCE_TRANSFORMER_CACHE = ".cache/huggingface/hub"
-
-DOI_PREFIX = "https://doi.org/"
 
 # suppress cuda warnings
 warnings.filterwarnings("ignore", message=".*CUDA initialization.*")

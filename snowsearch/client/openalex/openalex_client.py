@@ -1,103 +1,28 @@
 import asyncio
-import dataclasses
 import os
-import re
 from asyncio import Semaphore
-from datetime import datetime
 from typing import List, Dict, Tuple, Any
 
 from aiohttp import ClientSession, ClientResponseError
 from yarl import URL
 
 from client.ai.model import ModelClient
-from db.paper_database import PaperDatabase, DOI_PREFIX
+from client.openalex.config import POLITE_RATE_LIMIT_SLEEP, DEFAULT_RATE_LIMIT_SLEEP, MAX_PER_PAGE, OPENALEX_BASE, \
+    QUERY_JSON_RE, MAX_RETRIES, NL_TO_QUERY_CONTEXT_FILE
+from client.openalex.dto import PaperDTO
+from client.openalex.exception import MissingOpenAlexEntryError, ExceedMaxQueryGenerationAttemptsError
+from db.config import DOI_PREFIX
+from db.paper_database import PaperDatabase
 from util.logger import logger
 
 """
-File: openalex.py
+File: openalex_client.py
 Description: Client for interacting with the OpenAlex Database
 
 https://docs.openalex.org/
 https://docs.openalex.org/api-guide-for-llms
 @author Derek Garcia
 """
-
-# https://docs.openalex.org/api-guide-for-llms#rate-limiting-best-practices
-# 1 requests per second
-DEFAULT_RATE_LIMIT_SLEEP = 1
-# 10 requests per second
-POLITE_RATE_LIMIT_SLEEP = 0.1
-# https://docs.openalex.org/how-to-use-the-api/get-lists-of-entities/paging?q=per_page#basic-paging
-MAX_PER_PAGE = 200
-
-NL_TO_QUERY_CONTEXT_FILE = "snowsearch/prompts/nl_to_elasticsearch_query.prompt"
-QUERY_JSON_RE = re.compile(r'\{\n.*"query": "(.*?)"')
-# attempts to generate OpenAlex query
-MAX_RETRIES = 3
-
-OPENALEX_BASE = "https://api.openalex.org"
-OPENALEX_PREFIX = "https://openalex.org/"
-
-
-class ExceedMaxQueryGenerationAttemptsError(Exception):
-    def __init__(self, model: str):
-        """
-        Failed to generate valid query string
-
-        :param model: Model used to attempt to generate query
-        """
-        super().__init__(f"Exceeded OpenAlex query generation using '{model}'")
-        self._model = model
-
-    @property
-    def model(self) -> str:
-        return self._model
-
-
-class MissingOpenAlexEntryError(Exception):
-    def __init__(self, doi: str, title: str):
-        """
-        Failed to find citation in OpenAlex database
-
-        :param doi: DOI id of citation
-        :param title: Paper title of citation
-        """
-        error_msg = f"Could not find citation in OpenAlex | '{title}'"
-        if doi:
-            error_msg += f" | {doi}"
-        super().__init__(error_msg)
-        self._doi = doi
-        self._title = title
-
-    @property
-    def doi(self) -> str:
-        return self._doi
-
-    @property
-    def title(self) -> str:
-        return self._title
-
-
-@dataclasses.dataclass
-class OpenAlexDTO:
-    id: str
-    title: str
-    doi: str
-    is_open_access: bool
-    pdf_url: str
-
-    def to_properties(self, with_id: bool = True) -> Dict[str, str | bool | datetime]:
-        props = {
-            'openalex_id': self.id.removeprefix(OPENALEX_PREFIX) if self.id else None,
-            'doi': self.doi.removeprefix(DOI_PREFIX) if self.doi else None,
-            'is_open_access': self.is_open_access,
-            'pdf_url': self.pdf_url,
-            'openalex_status': 200,
-            'time_added': datetime.now()
-        }
-        if with_id:
-            props['id'] = self.title
-        return props
 
 
 class OpenAlexClient:
@@ -156,7 +81,7 @@ class OpenAlexClient:
             return await response.json()
 
     async def _fetch_page(self, session: ClientSession, query: str, cursor: str = '*') -> Tuple[
-        str | None, List[OpenAlexDTO]]:
+        str | None, List[PaperDTO]]:
         """
         Search for query from OpenAlex
 
@@ -172,7 +97,7 @@ class OpenAlexClient:
 
         # parse findings
         return result['meta']['next_cursor'], [
-            OpenAlexDTO(p['id'], p['title'], p['doi'], bool(p['open_access']['is_oa']), p['open_access']['oa_url'])
+            PaperDTO(p['id'], p['title'], p['doi'], bool(p['open_access']['is_oa']), p['open_access']['oa_url'])
             for p in result.get('results', [])
         ]
 
@@ -187,7 +112,7 @@ class OpenAlexClient:
         result = await self._fetch(session, "works", {'filter': f"title_and_abstract.search:{query}"}, 1)
         return int(result['meta']['count'])
 
-    async def _fetch_by_doi(self, session: ClientSession, doi: str) -> OpenAlexDTO | None:
+    async def _fetch_by_doi(self, session: ClientSession, doi: str) -> PaperDTO | None:
         """
         Fetch paper from OpenAlex by DOI
 
@@ -199,14 +124,14 @@ class OpenAlexClient:
         try:
             paper = await self._fetch(session, f"works/{DOI_PREFIX}{doi}", per_page=1)
             # parse results
-            return OpenAlexDTO(paper['id'], paper['title'], doi, bool(paper['open_access']['is_oa']),
-                               paper['open_access']['oa_url'])
+            return PaperDTO(paper['id'], paper['title'], doi, bool(paper['open_access']['is_oa']),
+                            paper['open_access']['oa_url'])
         except ClientResponseError:
             # todo - assuming 404
             # return none if no hits
             return None
 
-    async def _fetch_by_exact_title(self, session: ClientSession, title: str) -> OpenAlexDTO | None:
+    async def _fetch_by_exact_title(self, session: ClientSession, title: str) -> PaperDTO | None:
         """
         Fetch paper from OpenAlex by exact title match
 
@@ -229,14 +154,14 @@ class OpenAlexClient:
         # not exact match
         if paper['title'] != title:
             return None
-        return OpenAlexDTO(paper['id'], paper['title'], paper['doi'], bool(paper['open_access']['is_oa']),
-                           paper['open_access']['oa_url'])
+        return PaperDTO(paper['id'], paper['title'], paper['doi'], bool(paper['open_access']['is_oa']),
+                        paper['open_access']['oa_url'])
 
     async def _fetch_citation_task(self,
                                    semaphore: Semaphore,
                                    session: ClientSession,
                                    doi: str | None,
-                                   title: str | None) -> OpenAlexDTO | None:
+                                   title: str | None) -> PaperDTO | None:
         """
         Task to fetch details for a single citation / paper
         First attempt to get by DOI if provided, then title
@@ -311,7 +236,7 @@ class OpenAlexClient:
             tasks = [self._fetch_citation_task(semaphore, session, c.get('doi'), c.get('id')) for c in citations]
             for future in logger.get_data_queue(tasks, "Fetching citation details", "citation", is_async=True):
                 try:
-                    result: OpenAlexDTO = await future
+                    result: PaperDTO = await future
                     # update citation
                     paper_db.upsert_paper(result.title, **result.to_properties(False))
                     num_success += 1
