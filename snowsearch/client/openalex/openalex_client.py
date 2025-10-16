@@ -225,11 +225,14 @@ class OpenAlexClient:
             progress = logger.get_data_queue(hits, "Querying OpenAlex Database", "paper")
             # fetch all papers
             next_cursor = "*"
+            rank_offset = 0
             while True:
                 try:
                     # save results
                     next_cursor, papers = await self._fetch_page(session, query, next_cursor)
-                    paper_db.insert_run_paper_batch(run_id, papers)
+                    ranked_papers = [(papers[i], i + rank_offset) for i in range(0, len(papers))]
+                    rank_offset += len(papers)
+                    paper_db.insert_run_paper_batch(run_id, ranked_papers)
                     break
                     # no pages left
                     if not next_cursor:

@@ -38,12 +38,11 @@ nodes:
       - "time_grobid_processed"
       - "time_added"
     relationships:
-      # This paper added this paper (during snowballing)
-      ADDED:
-        - "Paper"
       REFERENCES:
         - "Paper"
 
 relationships:
   ADDED:
+    properties:
+      - "rank"
   REFERENCES:

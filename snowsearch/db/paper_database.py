@@ -151,15 +151,40 @@ class PaperDatabase(Neo4jDatabase):
                                      run_node.create_relationship_to(paper_node.type, RelationshipType.ADDED),
                                      paper_node)
 
-    def insert_run_paper_batch(self, run_id: int, papers: List[PaperDTO]) -> None:
+    def insert_run_paper_batch(self, run_id: int, hits: List[Tuple[PaperDTO, int]]) -> None:
         """
         Insert a batch of papers found by an OpenAlex run
 
         :param run_id: ID of run this batch of papers was found in
-        :param papers: List of papers
+        :param hits: List of papers and their OpenAlex search ranking
         """
         # wrapper to keep relationship logic internal
-        self._insert_paper_batch(Node.create(NodeType.RUN, {'id': run_id}), RelationshipType.ADDED, papers)
+
+        # get match ids
+        match_ids, dtos = [], []
+        for p, _ in hits:
+            match_ids.append(Node.create(NodeType.PAPER, asdict(p)).match_id)
+            dtos.append(p)
+        # insert nodes
+        self._insert_paper_batch(Node.create(NodeType.RUN, {'id': run_id}), RelationshipType.ADDED, dtos)
+
+        # add ranking
+        ranked_papers = [
+            {
+                "match_id": match_ids[i],
+                "rank": rank
+            }
+            for i, (_, rank) in enumerate(hits)
+        ]
+        query = f"""
+        UNWIND $ranked_papers AS item
+        MATCH (run:{NodeType.RUN.value} {{id: $run_id}})
+        MATCH (paper:{NodeType.PAPER.value} {{match_id: item.match_id}})
+        MERGE (run)-[r:{RelationshipType.ADDED.value}]->(paper)
+        SET r.rank = item.rank
+        """
+        with self._driver.session() as session:
+            session.run(query, run_id=run_id, ranked_papers=ranked_papers)
 
     def insert_citation_paper_batch(self, source_title: str, papers: List[PaperDTO]) -> None:
         """
@@ -205,23 +230,38 @@ class PaperDatabase(Neo4jDatabase):
                         papers=[{'match_id': node.match_id, **node.required_properties, **node.properties} for node in
                                 paper_nodes])
 
-    def get_all_unprocessed_pdf_urls(self) -> List[PaperDTO]:
+    def get_unprocessed_pdf_urls(self, run_id: int = None, paper_limit: int = None) -> List[PaperDTO]:
         """
         Get all papers with pdfs that haven't been processed by grobid yet
+        If the run_id is provided, the list of papers are returned in order to most to least
+        relevant determined by original openalex query
 
+        :param run_id: Optional run the paper was discovered in (Default: None)
+        :param paper_limit: Limit the max number of papers to return (Default: None)
         :return: List of paper titles and pdf urls
         """
+        # base query
         query = f"""
-            MATCH (p:{NodeType.PAPER.value}) 
             WHERE p.pdf_url IS NOT NULL 
             AND p.download_status IS NULL 
             AND p.grobid_status IS NULL 
             AND p.is_open_access 
             RETURN p.id AS id, p.pdf_url AS pdf_url
             """
-        # todo - add time filter
+
+        # order by run rank if provided
+        prefix = f"MATCH (run:{NodeType.RUN.value} {{id: $run_id}})-[r:{RelationshipType.ADDED.value}]->(p:{NodeType.PAPER.value})" if run_id else f"MATCH (p:{NodeType.PAPER.value})"
+        query = f"{prefix} {query}"
+        if run_id:
+            query = f"{query} ORDER BY r.rank"
+
+        # add limit if provided
+        if paper_limit:
+            query = f"{query} LIMIT {paper_limit}"
+
+        # exe query
         with self._driver.session() as session:
-            results = session.run(query)
+            results = session.run(query, run_id=run_id) if run_id else session.run(query)
             return [PaperDTO(r['id'], pdf_url=r['pdf_url']) for r in results]
 
     def search_by_prompt_papers(self, prompt: str, paper_limit: int = 100, min_score: float = None) -> List[
