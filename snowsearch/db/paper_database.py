@@ -131,6 +131,7 @@ class PaperDatabase(Neo4jDatabase):
                      abstract_text: str = None,
                      is_open_access: bool = None,
                      pdf_url: str = None,
+                     openalex_status: int = None,
                      download_status: int = None,
                      download_error_msg: str = None,
                      grobid_status: int = None,
@@ -147,6 +148,7 @@ class PaperDatabase(Neo4jDatabase):
         :param abstract_text: Abstract of paper
         :param is_open_access: Is paper open access yet
         :param pdf_url: URL of paper pdf
+        :param openalex_status: HTTP status of openalex
         :param download_status: HTTP status of download
         :param download_error_msg: Error message for download
         :param grobid_status: HTTP status of grobid process
@@ -162,6 +164,7 @@ class PaperDatabase(Neo4jDatabase):
             'abstract_text': abstract_text,
             'is_open_access': is_open_access,
             'pdf_url': pdf_url,
+            'openalex_status': openalex_status,
             'download_status': download_status,
             'download_error_msg': download_error_msg,
             'grobid_status': grobid_status,
@@ -309,7 +312,7 @@ class PaperDatabase(Neo4jDatabase):
         WHERE s.id = $source_title
         WITH c
         MATCH (any_paper:{NodeType.PAPER.value})-[:{RelationshipType.REFERENCES.value}]->(c)
-        WHERE c.download_status IS NULL
+        WHERE c.download_status IS NULL AND c.openalex_status IS NULL
         RETURN c.id AS id, c.doi AS doi, count(any_paper) AS citations
         ORDER BY citations DESC
         {'LIMIT $topK' if top_k else ''}

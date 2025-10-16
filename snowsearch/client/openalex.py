@@ -18,13 +18,15 @@ File: openalex.py
 Description: Client for interacting with the OpenAlex Database
 
 https://docs.openalex.org/
-
+https://docs.openalex.org/api-guide-for-llms
 @author Derek Garcia
 """
 
-# https://docs.openalex.org/how-to-use-the-api/rate-limits-and-authentication
+# https://docs.openalex.org/api-guide-for-llms#rate-limiting-best-practices
+# 1 requests per second
+DEFAULT_RATE_LIMIT_SLEEP = 1
 # 10 requests per second
-RATE_LIMIT_SLEEP = 0.1
+POLITE_RATE_LIMIT_SLEEP = 0.1
 # https://docs.openalex.org/how-to-use-the-api/get-lists-of-entities/paging?q=per_page#basic-paging
 MAX_PER_PAGE = 200
 
@@ -38,15 +40,42 @@ OPENALEX_PREFIX = "https://openalex.org/"
 
 
 class ExceedMaxQueryGenerationAttemptsError(Exception):
-    """Failed to generate valid query string"""
-
     def __init__(self, model: str):
+        """
+        Failed to generate valid query string
+
+        :param model: Model used to attempt to generate query
+        """
         super().__init__(f"Exceeded OpenAlex query generation using '{model}'")
         self._model = model
 
     @property
     def model(self) -> str:
         return self._model
+
+
+class MissingOpenAlexEntryError(Exception):
+    def __init__(self, doi: str, title: str):
+        """
+        Failed to find citation in OpenAlex database
+
+        :param doi: DOI id of citation
+        :param title: Paper title of citation
+        """
+        error_msg = f"Could not find citation in OpenAlex | '{title}'"
+        if doi:
+            error_msg += f" | {doi}"
+        super().__init__(error_msg)
+        self._doi = doi
+        self._title = title
+
+    @property
+    def doi(self) -> str:
+        return self._doi
+
+    @property
+    def title(self) -> str:
+        return self._title
 
 
 @dataclasses.dataclass
@@ -57,15 +86,18 @@ class OpenAlexDTO:
     is_open_access: bool
     pdf_url: str
 
-    def to_properties(self) -> Dict[str, str | bool | datetime]:
-        return {
-            'id': self.title,
+    def to_properties(self, with_id: bool = True) -> Dict[str, str | bool | datetime]:
+        props = {
             'openalex_id': self.id.removeprefix(OPENALEX_PREFIX) if self.id else None,
             'doi': self.doi.removeprefix(DOI_PREFIX) if self.doi else None,
             'is_open_access': self.is_open_access,
             'pdf_url': self.pdf_url,
+            'openalex_status': 200,
             'time_added': datetime.now()
         }
+        if with_id:
+            props['id'] = self.title
+        return props
 
 
 class OpenAlexClient:
@@ -80,6 +112,9 @@ class OpenAlexClient:
         """
         self._model_client = model_client
         self._email = email
+        if not email:
+            logger.warn("No email provided for OpenAlex - Using slower API")
+        self._rate_limit = POLITE_RATE_LIMIT_SLEEP if email else DEFAULT_RATE_LIMIT_SLEEP
         self._api_key_available = False  # default false
         # check for OpenAlex API key
         if os.getenv('OPENALEX_API_KEY'):
@@ -111,7 +146,7 @@ class OpenAlexClient:
         self._add_auth(params)
         params['per_page'] = per_page
         # block to respect rate limit
-        await asyncio.sleep(RATE_LIMIT_SLEEP)
+        await asyncio.sleep(POLITE_RATE_LIMIT_SLEEP)
         # make the request, remove key for logging
         url = URL(f"{OPENALEX_BASE}/{openalex_endpoint.removeprefix('/')}").with_query(params).without_query_params(
             'OPENALEX_API_KEY')
@@ -227,8 +262,8 @@ class OpenAlexClient:
         if paper:
             logger.debug_msg(f"Found '{paper.title}' by {method}")
             return paper
-        # else none
-        return None
+        # else raise error
+        raise MissingOpenAlexEntryError(doi, title)
 
     async def save_seed_papers(self, run_id: int, paper_db: PaperDatabase, query: str) -> None:
         """
@@ -268,16 +303,31 @@ class OpenAlexClient:
         :param citations: List of citations to fetch details for
         """
         semaphore = Semaphore()  # semaphore so only 1 request at a time to prevent tripping rate limit
+        num_success = 0
+        num_missing = 0
         logger.debug_msg(f"Searching for details for {len(citations)} citations")
         async with ClientSession() as session:
+            # todo - bulk requests https://docs.openalex.org/api-guide-for-llms#bulk-lookup-by-dois
             tasks = [self._fetch_citation_task(semaphore, session, c.get('doi'), c.get('id')) for c in citations]
             for future in logger.get_data_queue(tasks, "Fetching citation details", "citation", is_async=True):
                 try:
-                    result = await future
-                    # todo save to db
+                    result: OpenAlexDTO = await future
+                    # update citation
+                    paper_db.upsert_paper(result.title, **result.to_properties(False))
+                    num_success += 1
+                except MissingOpenAlexEntryError as e:
+                    logger.error_exp(e)
+                    paper_db.upsert_paper(e.title, openalex_status=404)
+                    num_missing += 1
                 except Exception as e:
                     # todo - handle exceed requests per day
                     logger.error_exp(e)
+
+        # report results
+        percent = lambda a, b: f"{(a / b) * 100:.01f}%"
+        logger.info(
+            f"Search complete, successfully updated {num_success} citations ({percent(num_success, len(citations))})")
+        logger.info(f"Failed to find {num_success} citations ({percent(num_missing, len(citations))})")
 
     def prompt_to_query(self, prompt: str) -> str:
         """

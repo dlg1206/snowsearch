@@ -27,7 +27,7 @@ class Level(Enum):
     """
     SILENT = (1, '')
     INFO = (2, '\033[97m')
-    WARN = (3, '\033[93m')
+    WARN = (2, '\033[93m')
     ERROR = (4, '\033[91m')
     DEBUG = (5, '\033[96m')
     FATAL = (-1, '\033[91m')
