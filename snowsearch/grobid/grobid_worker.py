@@ -9,11 +9,11 @@ import grobid_tei_xml
 from aiohttp import ClientSession, ClientResponseError
 from grobid_client.grobid_client import GrobidClient
 
-from client.grobid.config import MAX_CONCURRENT_DOWNLOADS, MAX_PDF_COUNT, KILOBYTE, DOWNLOAD_HEADERS, MAX_RETRIES
-from client.grobid.dto import GrobidDTO, CitationDTO
-from client.grobid.exception import PaperDownloadError, GrobidProcessError
-from client.openalex.dto import PaperDTO
 from db.paper_database import PaperDatabase
+from grobid.config import MAX_CONCURRENT_DOWNLOADS, MAX_PDF_COUNT, KILOBYTE, DOWNLOAD_HEADERS, MAX_RETRIES
+from grobid.dto import GrobidDTO, CitationDTO
+from grobid.exception import PaperDownloadError, GrobidProcessError
+from openalex.dto import PaperDTO
 from util.logger import logger
 from util.timer import Timer
 

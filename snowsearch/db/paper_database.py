@@ -6,11 +6,11 @@ from typing import Dict, List, Tuple, Any
 
 from sentence_transformers import SentenceTransformer
 
-from client.grobid.dto import CitationDTO
-from client.openalex.dto import PaperDTO
 from db.config import DEFAULT_EMBEDDING_MODEL, DEFAULT_DIMENSIONS, SENTENCE_TRANSFORMER_CACHE, DOI_PREFIX
 from db.database import Neo4jDatabase
 from db.entity import Node, NodeType, RelationshipType
+from grobid.dto import CitationDTO
+from openalex.dto import PaperDTO
 from util.logger import logger
 from util.timer import Timer
 

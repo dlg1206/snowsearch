@@ -6,14 +6,14 @@ from typing import List, Dict, Tuple, Any
 from aiohttp import ClientSession, ClientResponseError
 from yarl import URL
 
-from client.ai.model import ModelClient
-from client.grobid.dto import CitationDTO
-from client.openalex.config import POLITE_RATE_LIMIT_SLEEP, DEFAULT_RATE_LIMIT_SLEEP, MAX_PER_PAGE, OPENALEX_BASE, \
-    QUERY_JSON_RE, MAX_RETRIES, NL_TO_QUERY_CONTEXT_FILE
-from client.openalex.dto import PaperDTO
-from client.openalex.exception import MissingOpenAlexEntryError, ExceedMaxQueryGenerationAttemptsError
+from ai.model import ModelClient
 from db.config import DOI_PREFIX
 from db.paper_database import PaperDatabase
+from grobid.dto import CitationDTO
+from openalex.config import POLITE_RATE_LIMIT_SLEEP, DEFAULT_RATE_LIMIT_SLEEP, MAX_PER_PAGE, OPENALEX_BASE, \
+    QUERY_JSON_RE, MAX_RETRIES, NL_TO_QUERY_CONTEXT_FILE
+from openalex.dto import PaperDTO
+from openalex.exception import MissingOpenAlexEntryError, ExceedMaxQueryGenerationAttemptsError
 from util.logger import logger
 
 """

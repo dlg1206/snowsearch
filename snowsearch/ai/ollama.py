@@ -1,7 +1,7 @@
 import requests
 from requests import HTTPError, ConnectionError
 
-from client.ai.model import ModelClient
+from ai.model import ModelClient
 from util.logger import logger
 from util.timer import Timer
 
