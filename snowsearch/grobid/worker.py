@@ -10,9 +10,9 @@ from aiohttp import ClientSession, ClientResponseError
 from grobid_client.grobid_client import GrobidClient
 
 from db.paper_database import PaperDatabase
-from grobid.config import MAX_CONCURRENT_DOWNLOADS, MAX_PDF_COUNT, KILOBYTE, DOWNLOAD_HEADERS, MAX_RETRIES
+from grobid.config import MAX_CONCURRENT_DOWNLOADS, MAX_PDF_COUNT, KILOBYTE, DOWNLOAD_HEADERS, MAX_RETRIES, PDF_MAGIC
 from grobid.dto import GrobidDTO, CitationDTO
-from grobid.exception import PaperDownloadError, GrobidProcessError
+from grobid.exception import PaperDownloadError, GrobidProcessError, NoFileDataError, InvalidFileFormatError
 from openalex.dto import PaperDTO
 from util.logger import logger
 from util.timer import Timer
@@ -25,7 +25,7 @@ Description:
 """
 
 # Mute grobid client logs
-logging.getLogger("grobid_client").setLevel(logging.CRITICAL)  # todo doesn't work
+logging.getLogger("grobid_client").setLevel(logging.CRITICAL + 1)  # todo doesn't work
 
 
 class GrobidWorker:
@@ -61,14 +61,28 @@ class GrobidWorker:
                     response.raise_for_status()
                     # download pdf
                     timer = Timer()
+                    first_pass = True
                     with open(output_path, 'wb') as f:
                         while True:
                             chunk = await response.content.read(KILOBYTE)
+
                             if not chunk:
+                                # no data to write
+                                if first_pass:
+                                    raise NoFileDataError(title, pdf_url)
+                                # break if no data left to read
                                 break
+
+                            # validate pdf
+                            if first_pass:
+                                # file is not a pdf
+                                if not chunk.startswith(PDF_MAGIC):
+                                    raise InvalidFileFormatError(title, pdf_url)
+                                first_pass = False
+
                             f.write(chunk)
             except ClientResponseError as e:
-                raise PaperDownloadError(title, e.status, e.message) from e
+                raise PaperDownloadError(title, e.status, e.message, pdf_url) from e
 
         logger.debug_msg(f"Saved '{output_path}' in {timer.format_time()}s | {pdf_url}")
 
@@ -150,6 +164,18 @@ class GrobidWorker:
                             paper_db.insert_citation_paper_batch(result.id, new_papers)
 
                         num_success += 1
+
+                    # no file to download
+                    except NoFileDataError as e:
+                        logger.error_exp(e)
+                        paper_db.upsert_paper(PaperDTO(e.paper_title, download_status=204))
+                        num_fail_download += 1
+
+                    # bad file format
+                    except InvalidFileFormatError as e:
+                        logger.error_exp(e)
+                        paper_db.upsert_paper(PaperDTO(e.paper_title, download_status=415))
+                        num_fail_download += 1
 
                     # failed to download pdf
                     except PaperDownloadError as e:

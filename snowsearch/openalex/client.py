@@ -206,7 +206,6 @@ class OpenAlexClient:
                     ranked_papers = [(papers[i], i + rank_offset) for i in range(0, len(papers))]
                     rank_offset += len(papers)
                     paper_db.insert_run_paper_batch(run_id, ranked_papers)
-                    break
                     # no pages left
                     if not next_cursor:
                         break

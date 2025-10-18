@@ -6,19 +6,63 @@ Description: Exceptions for Grobid
 """
 
 
+class InvalidFileFormatError(Exception):
+    def __init__(self, paper_title: str, pdf_url: str):
+        """
+        File is not a PDF
+
+        :param paper_title: Title of paper failed to process
+        :param pdf_url: URL of invalid pdf
+        """
+        super().__init__(f"'{paper_title}' is not a pdf, skipping | {pdf_url}")
+        self._paper_title = paper_title
+        self._pdf_url = pdf_url
+
+    @property
+    def paper_title(self) -> str:
+        return self._paper_title
+
+    @property
+    def pdf_url(self) -> str:
+        return self._pdf_url
+
+
+class NoFileDataError(Exception):
+    def __init__(self, paper_title: str, pdf_url: str):
+        """
+        No data to read from the url
+
+        :param paper_title: Title of paper failed to process
+        :param pdf_url: URL of invalid file
+        """
+        super().__init__(f"'{paper_title}' returned no data, skipping | {pdf_url}")
+        self._paper_title = paper_title
+        self._pdf_url = pdf_url
+
+    @property
+    def paper_title(self) -> str:
+        return self._paper_title
+
+    @property
+    def pdf_url(self) -> str:
+        return self._pdf_url
+
+
 class PaperDownloadError(Exception):
-    def __init__(self, paper_title: str, status_code: int, error_msg: str):
+    def __init__(self, paper_title: str, status_code: int, error_msg: str, pdf_url: str):
         """
         Create new failure error
 
         :param paper_title: Title of paper failed to process
         :param status_code: Grobid server status code
         :param error_msg: Grobid server error message
+        :param pdf_url: URL of failed pdf download
         """
-        super().__init__(f"Failed to download '{paper_title}' | {status_code} | {error_msg}")
+        super().__init__(f"Failed to download '{paper_title}' | {status_code} | {error_msg} | {pdf_url}")
         self._paper_title = paper_title
         self._status_code = status_code
         self._error_msg = error_msg
+        self._pdf_url = pdf_url
 
     @property
     def paper_title(self) -> str:
