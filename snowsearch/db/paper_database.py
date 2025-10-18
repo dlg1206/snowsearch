@@ -284,7 +284,11 @@ class PaperDatabase(Neo4jDatabase):
             results = session.run(query, run_id=run_id) if run_id else session.run(query)
             return [PaperDTO(r['id'], pdf_url=r['pdf_url']) for r in results]
 
-    def search_by_prompt_papers(self, prompt: str, paper_limit: int = 100, min_score: float = None) -> List[
+    def search_by_prompt_papers(self,
+                                prompt: str,
+                                paper_limit: int = 100,
+                                min_score: float = None,
+                                include_abstract: bool = False) -> List[
         Tuple[PaperDTO, float]]:
         """
         Get papers with abstracts that best match the prompt
@@ -293,6 +297,7 @@ class PaperDatabase(Neo4jDatabase):
         :param prompt: Search prompt
         :param paper_limit: Limit the max number of papers to return (Default: 100)
         :param min_score: Minimum similarity score of prompt to abstract, must be [-1,1] (Default: None but 0.4 recommended)
+        :param include_abstract: Include the abstract text with the dto (Default: False)
         :raises ValueError: If provided min_score is outside [-1,1] range
         :return: List of top_k paper titles that best match the given prompt and their score
         """
@@ -308,7 +313,7 @@ class PaperDatabase(Neo4jDatabase):
           $embedding
         ) YIELD node, score
         WHERE node.grobid_status = 200 {'AND score > $minScore' if min_score else ''}
-        RETURN node.id AS id, score AS score
+        RETURN node.id AS id, node.abstract_text AS abst, score AS score
         ORDER BY score DESC
         """
         # set params
@@ -318,7 +323,8 @@ class PaperDatabase(Neo4jDatabase):
         # exe query
         with self._driver.session() as session:
             results = session.run(query, **params)
-            return [(PaperDTO(r['id']), r['score']) for r in results]
+            return [(PaperDTO(r['id'], abstract_text=r['abst'] if include_abstract else None), r['score'])
+                    for r in results]
 
     def get_unprocessed_citations(self, source_title: str, top_k: int = None) -> List[CitationDTO]:
         """
