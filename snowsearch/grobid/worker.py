@@ -1,114 +1,31 @@
 import asyncio
-import dataclasses
 import logging
 from asyncio import Semaphore
 from datetime import datetime
 from tempfile import NamedTemporaryFile, TemporaryDirectory
-from typing import List, Tuple, Dict, Any, Callable, Coroutine
+from typing import List, Dict, Any, Callable, Coroutine
 
 import grobid_tei_xml
 from aiohttp import ClientSession, ClientResponseError
 from grobid_client.grobid_client import GrobidClient
 
 from db.paper_database import PaperDatabase
+from grobid.config import MAX_CONCURRENT_DOWNLOADS, MAX_PDF_COUNT, KILOBYTE, DOWNLOAD_HEADERS, MAX_RETRIES, PDF_MAGIC
+from grobid.dto import GrobidDTO, CitationDTO
+from grobid.exception import PaperDownloadError, GrobidProcessError, NoFileDataError, InvalidFileFormatError
+from openalex.dto import PaperDTO
 from util.logger import logger
 from util.timer import Timer
 
 """
-File: grobid.py
+File: worker.py
 Description: 
 
 @author Derek Garcia
 """
 
 # Mute grobid client logs
-logging.getLogger("grobid_client").setLevel(logging.CRITICAL)  # todo doesn't work
-
-# grobid server details
-DEFAULT_HOST = "localhost"
-DEFAULT_PORT = 8070
-# download details
-MAX_CONCURRENT_DOWNLOADS = 10  # todo add config option
-MAX_PDF_COUNT = 100  # max pdfs allowed to be downloaded at a time
-MAX_RETRIES = 3
-KILOBYTE = 1024
-
-DOWNLOAD_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:116.0) Gecko/20100101 Firefox/116.0",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-    "Accept-Language": "en-US,en;q=0.5",
-    "Accept-Encoding": "gzip, deflate, br",
-    "Connection": "keep-alive",
-    "Upgrade-Insecure-Requests": "1",
-    "TE": "Trailers"
-}
-
-
-@dataclasses.dataclass
-class CitationDTO:
-    title: str
-    doi: str
-
-
-@dataclasses.dataclass
-class GrobidDTO:
-    title: str
-    abstract: str
-    citations: List[CitationDTO]
-
-
-class PaperDownloadError(Exception):
-    def __init__(self, paper_title: str, status_code: int, error_msg: str):
-        """
-        Create new failure error
-
-        :param paper_title: Title of paper failed to process
-        :param status_code: Grobid server status code
-        :param error_msg: Grobid server error message
-        """
-        super().__init__(f"Failed to download '{paper_title}' | {status_code} | {error_msg}")
-        self._paper_title = paper_title
-        self._status_code = status_code
-        self._error_msg = error_msg
-
-    @property
-    def paper_title(self) -> str:
-        return self._paper_title
-
-    @property
-    def status_code(self) -> int:
-        return self._status_code
-
-    @property
-    def error_msg(self) -> str:
-        return self._error_msg
-
-
-class GrobidProcessError(Exception):
-    def __init__(self, paper_title: str, status_code: int, error_msg: str):
-        """
-        Create new failure error
-
-        :param paper_title: Title of paper failed to process
-        :param status_code: Grobid server status code
-        :param error_msg: Grobid server error message
-        """
-        super().__init__(f"Failed to process '{paper_title}' | {status_code} | {error_msg}")
-        self._paper_title = paper_title
-        self._status_code = status_code
-        self._error_msg = error_msg
-
-    @property
-    def paper_title(self) -> str:
-        return self._paper_title
-
-    @property
-    def status_code(self) -> int:
-        return self._status_code
-
-    @property
-    def error_msg(self) -> str:
-        return self._error_msg
+logging.getLogger("grobid_client").setLevel(logging.CRITICAL + 1)  # todo doesn't work
 
 
 class GrobidWorker:
@@ -126,7 +43,7 @@ class GrobidWorker:
         self._download_semaphore = Semaphore(MAX_CONCURRENT_DOWNLOADS)  # todo config to handle max requests at one time
         self._pdf_file_semaphore = Semaphore(MAX_PDF_COUNT)  # todo config to handle max requests at one time
 
-    async def _download_pdf(self, session: ClientSession, title: str, pdf_url: str, output_path: str):
+    async def _download_pdf(self, session: ClientSession, title: str, pdf_url: str, output_path: str) -> None:
         """
         Download pdf to file
 
@@ -144,14 +61,28 @@ class GrobidWorker:
                     response.raise_for_status()
                     # download pdf
                     timer = Timer()
+                    first_pass = True
                     with open(output_path, 'wb') as f:
                         while True:
                             chunk = await response.content.read(KILOBYTE)
+
                             if not chunk:
+                                # no data to write
+                                if first_pass:
+                                    raise NoFileDataError(title, pdf_url)
+                                # break if no data left to read
                                 break
+
+                            # validate pdf
+                            if first_pass:
+                                # file is not a pdf
+                                if not chunk.startswith(PDF_MAGIC):
+                                    raise InvalidFileFormatError(title, pdf_url)
+                                first_pass = False
+
                             f.write(chunk)
             except ClientResponseError as e:
-                raise PaperDownloadError(title, e.status, e.message) from e
+                raise PaperDownloadError(title, e.status, e.message, pdf_url) from e
 
         logger.debug_msg(f"Saved '{output_path}' in {timer.format_time()}s | {pdf_url}")
 
@@ -196,7 +127,7 @@ class GrobidWorker:
 
         return GrobidDTO(title, doc.abstract, [CitationDTO(c.title, c.doi) for c in doc.citations])
 
-    async def process_papers(self, paper_db: PaperDatabase, papers: List[Tuple[str, str]]):
+    async def process_papers(self, paper_db: PaperDatabase, papers: List[PaperDTO]):
         """
         Process a list of papers and save them to the database
 
@@ -212,42 +143,57 @@ class GrobidWorker:
         with TemporaryDirectory(prefix='grobid-') as work_dir:
             async with ClientSession() as session:
                 # queue tasks
-                tasks = [self._process_paper_task(session, work_dir, t, p) for t, p in papers]
+                tasks = [self._process_paper_task(session, work_dir, p.id, p.pdf_url) for p in papers]
                 logger.debug_msg(f"Processing {len(papers)} papers")
                 # save results as complete
                 for future in logger.get_data_queue(tasks, "Processing papers", "papers", is_async=True):
                     try:
                         result: GrobidDTO = await future
                         # update abstract
-                        paper_db.upsert_paper(result.title,
-                                              abstract_text=result.abstract,
-                                              download_status=200,
-                                              grobid_status=200,
-                                              time_grobid_processed=datetime.now())
-                        # add referenced papers
+                        paper_db.upsert_paper(PaperDTO(result.id,
+                                                       abstract_text=result.abstract,
+                                                       download_status=200,
+                                                       grobid_status=200,
+                                                       time_grobid_processed=datetime.now()))
+                        # add referenced papers, if any
+                        new_papers = []
                         if result.citations:
-                            paper_properties = []
                             for c in result.citations:
-                                paper_properties.append({'id': c.title, 'doi': c.doi})
-                                citations.add(c.title)
-                            paper_db.insert_citation_paper_batch(result.title, paper_properties)
+                                new_papers.append(PaperDTO(c.id, doi=c.doi, time_added=datetime.now()))
+                                citations.add(c)
+                            paper_db.insert_citation_paper_batch(result.id, new_papers)
 
                         num_success += 1
+
+                    # no file to download
+                    except NoFileDataError as e:
+                        logger.error_exp(e)
+                        paper_db.upsert_paper(PaperDTO(e.paper_title, download_status=204))
+                        num_fail_download += 1
+
+                    # bad file format
+                    except InvalidFileFormatError as e:
+                        logger.error_exp(e)
+                        paper_db.upsert_paper(PaperDTO(e.paper_title, download_status=415))
+                        num_fail_download += 1
+
                     # failed to download pdf
                     except PaperDownloadError as e:
                         logger.error_exp(e)
-                        paper_db.upsert_paper(e.paper_title, download_status=e.status_code,
-                                              download_error_msg=e.error_msg)
+                        paper_db.upsert_paper(
+                            PaperDTO(e.paper_title, download_status=e.status_code, download_error_msg=e.error_msg))
                         num_fail_download += 1
                     # failed to parse pdf
                     except GrobidProcessError as e:
                         logger.error_exp(e)
-                        paper_db.upsert_paper(e.paper_title, grobid_status=e.status_code, grobid_error_msg=e.error_msg)
+                        paper_db.upsert_paper(
+                            PaperDTO(e.paper_title, grobid_status=e.status_code, grobid_error_msg=e.error_msg))
                         num_fail_process += 1
                     # misc exception
                     except Exception as e:
                         logger.error_exp(e)
                         num_misc_error += 1
+
         # report results
         percent = lambda a, b: f"{(a / b) * 100:.01f}%"
         logger.info(
@@ -257,7 +203,8 @@ class GrobidWorker:
         logger.info(f"Failed to process {num_fail_process} papers ({percent(num_fail_process, len(papers))})")
 
 
-async def _retry_wrapper(callback: Callable[[], Coroutine[Any, Any, Any]], retries: int = MAX_RETRIES,
+async def _retry_wrapper(callback: Callable[[], Coroutine[Any, Any, Any]],
+                         retries: int = MAX_RETRIES,
                          backoff: float = 0.0) -> Any:
     """
     Util method to wrap retry logic

@@ -21,51 +21,6 @@ agent:
   # If using ollama, specify a tag model to use, will default to 'latest'
   tag: 8b
 
-# Options for findpapers
-# https://github.com/jonatasgrosman/findpapers
-# Set FINDPAPERS_SCOPUS_API_TOKEN and FINDPAPERS_IEEE_API_TOKEN in the .env file if available
-findpapers:
-  # A lower bound (inclusive) date that will be used to filter the search results.
-  # Following the pattern YYYY-MM-DD. E.g. 2020-12-31
-  # since:
-
-  # An upper bound (inclusive) date that will be used to filter the search results.
-  # Following the pattern YYYY-MM-DD. E.g. 2020-12-31
-  # until:
-
-  # The max number of papers to collect
-  # limit: 10
-
-  # The max number of papers to collect per each database
-  # limit_per_database:
-
-  # List of databases where the search should be performed, if not specified all databases will be used
-  # To access IEEE and Scopus, an API key must be used
-  #   IEEE (https://developer.ieee.org) and set FINDPAPERS_SCOPUS_API_TOKEN env var
-  #   Scopus (https://dev.elsevier.com) and set FINDPAPERS_IEEE_API_TOKEN env var
-  # options:
-  # - ~~acm~~ ACM is an option but not working, see https://github.com/jonatasgrosman/findpapers/issues/6
-  # - arxiv
-  # - biorxiv
-  # - ieee
-  # - medrxiv
-  # - pubmed
-  # - scopus
-  # databases:
-
-  # List of publication types to filter when searching, if not specified all the publication types will be collected
-  # options:
-  # - journal
-  # - conference
-  # - proceedings
-  # - book
-  # - other
-  # publication_types:
-
-  # Proxy URL that can be used during requests
-  # Intended for institution proxies (like a campus library) to access protected docs
-  # proxy:
-
 # Config for OpenAlex API
 # https://docs.openalex.org/
 openalex:

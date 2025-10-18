@@ -2,7 +2,7 @@ import os
 
 from openai import AuthenticationError
 
-from client.ai.model import ModelClient
+from ai.model import ModelClient
 from util.logger import logger
 
 """

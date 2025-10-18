@@ -1,12 +1,16 @@
 import os
 import warnings
+from dataclasses import asdict
 from datetime import datetime
 from typing import Dict, List, Tuple, Any
 
 from sentence_transformers import SentenceTransformer
 
+from db.config import DEFAULT_EMBEDDING_MODEL, DEFAULT_DIMENSIONS, SENTENCE_TRANSFORMER_CACHE, DOI_PREFIX
 from db.database import Neo4jDatabase
 from db.entity import Node, NodeType, RelationshipType
+from grobid.dto import CitationDTO
+from openalex.dto import PaperDTO
 from util.logger import logger
 from util.timer import Timer
 
@@ -17,13 +21,6 @@ Description: Specialized interface for abstracting Neo4j commands to the databas
 
 @author Derek Garcia
 `"""
-
-# embedding model details
-DEFAULT_EMBEDDING_MODEL = "all-MiniLM-L6-v2"
-DEFAULT_DIMENSIONS = 384
-SENTENCE_TRANSFORMER_CACHE = ".cache/huggingface/hub"
-
-DOI_PREFIX = "https://doi.org/"
 
 # suppress cuda warnings
 warnings.filterwarnings("ignore", message=".*CUDA initialization.*")
@@ -47,7 +44,7 @@ class PaperDatabase(Neo4jDatabase):
             logger.debug_msg("Embedding model utilizing gpu")
         else:
             device = "cpu"
-            logger.warn("Using cpu to create abstract embeddings -- this may impact performance")
+            logger.warn("Using cpu to create embeddings -- this may impact performance")
 
         # download embedding model if needed
         model_downloaded = _is_model_local(embedding_model)
@@ -124,55 +121,23 @@ class PaperDatabase(Neo4jDatabase):
         })
         self.insert_node(run_node, True)
 
-    def upsert_paper(self, title: str,
-                     run_id: int = None,
-                     openalex_id: str = None,
-                     doi: str = None,
-                     abstract_text: str = None,
-                     is_open_access: bool = None,
-                     pdf_url: str = None,
-                     download_status: int = None,
-                     download_error_msg: str = None,
-                     grobid_status: int = None,
-                     grobid_error_msg: str = None,
-                     time_grobid_processed: datetime = None,
-                     time_added: datetime = None) -> None:
+    def upsert_paper(self, paper: PaperDTO, run_id: int = None) -> None:
         """
         Insert paper into database and optional details
 
-        :param title: Title of paper (key)
-        :param run_id: ID of run
-        :param openalex_id: OpenAlex Work ID
-        :param doi: DOI of paper
-        :param abstract_text: Abstract of paper
-        :param is_open_access: Is paper open access yet
-        :param pdf_url: URL of paper pdf
-        :param download_status: HTTP status of download
-        :param download_error_msg: Error message for download
-        :param grobid_status: HTTP status of grobid process
-        :param grobid_error_msg: Error message for grobid
-        :param time_grobid_processed: Time processed with grobid
-        :param time_added: Time initially added
+        :param paper: DTO with paper details
+        :param run_id: Optional ID of run (Default: None)
         """
         # add properties
-        properties: Dict[str, Any] = {
-            'id': title,
-            'openalex_id': openalex_id,
-            'doi': doi,
-            'abstract_text': abstract_text,
-            'is_open_access': is_open_access,
-            'pdf_url': pdf_url,
-            'download_status': download_status,
-            'download_error_msg': download_error_msg,
-            'grobid_status': grobid_status,
-            'grobid_error_msg': grobid_error_msg,
-            'time_grobid_processed': time_grobid_processed,
-            'time_added': time_added
-        }
+        properties = asdict(paper)
+
+        # ensure just DOI id
+        if paper.doi:
+            properties['doi'] = paper.doi.removeprefix(DOI_PREFIX)
 
         # calculate embedding if abstract available
-        if abstract_text:
-            abstract_embedding = self._embedding_model.encode(abstract_text, show_progress_bar=False).tolist()
+        if paper.abstract_text:
+            abstract_embedding = self._embedding_model.encode(paper.abstract_text, show_progress_bar=False).tolist()
             properties['abstract_embedding'] = abstract_embedding
 
         # insert node
@@ -186,44 +151,88 @@ class PaperDatabase(Neo4jDatabase):
                                      run_node.create_relationship_to(paper_node.type, RelationshipType.ADDED),
                                      paper_node)
 
-    def insert_run_paper_batch(self, run_id: int, paper_properties: List[Dict[str, str]]) -> None:
+    def insert_run_paper_batch(self, run_id: int, hits: List[Tuple[PaperDTO, int]]) -> None:
         """
         Insert a batch of papers found by an OpenAlex run
 
         :param run_id: ID of run this batch of papers was found in
-        :param paper_properties: List of paper properties
+        :param hits: List of papers and their OpenAlex search ranking
         """
         # wrapper to keep relationship logic internal
-        self._insert_paper_batch(Node.create(NodeType.RUN, {'id': run_id}), RelationshipType.ADDED, paper_properties)
 
-    def insert_citation_paper_batch(self, source_title: str, paper_properties: List[Dict[str, str]]) -> None:
+        # get match ids
+        match_ids, dtos = [], []
+        for p, _ in hits:
+            match_ids.append(Node.create(NodeType.PAPER, asdict(p)).match_id)
+            dtos.append(p)
+        # insert nodes
+        self._insert_paper_batch(Node.create(NodeType.RUN, {'id': run_id}), RelationshipType.ADDED, dtos)
+
+        # add ranking
+        ranked_papers = [
+            {
+                "match_id": match_ids[i],
+                "rank": rank
+            }
+            for i, (_, rank) in enumerate(hits)
+        ]
+        query = f"""
+        UNWIND $ranked_papers AS item
+        MATCH (run:{NodeType.RUN.value} {{id: $run_id}})
+        MATCH (paper:{NodeType.PAPER.value} {{match_id: item.match_id}})
+        MERGE (run)-[r:{RelationshipType.ADDED.value}]->(paper)
+        SET r.rank = item.rank
+        """
+        with self._driver.session() as session:
+            session.run(query, run_id=run_id, ranked_papers=ranked_papers)
+
+    def insert_citation_paper_batch(self, source_title: str, papers: List[PaperDTO]) -> None:
         """
         Insert a batch of papers cited by a source paper
 
         :param source_title: Title of paper that cites these papers
-        :param paper_properties: List of paper properties
+        :param papers: List of papers
         """
         # wrapper to keep relationship logic internal
-        self._insert_paper_batch(Node.create(NodeType.PAPER, {'id': source_title}), RelationshipType.REFERENCES,
-                                 paper_properties)
+        self._insert_paper_batch(Node.create(NodeType.PAPER, {'id': source_title}), RelationshipType.REFERENCES, papers)
 
-    def _insert_paper_batch(self,
-                            source_node: Node,
-                            rel_type: RelationshipType,
-                            paper_properties: List[Dict[str, str]]) -> None:
+    def insert_paper_batch(self, papers: List[PaperDTO]) -> None:
         """
-        Batch insert a list of papers found by a source
+        Batch insert a list of papers
 
-        :param source_node: Source node that found this batch of papers
-        :param rel_type: Relationship of source node to batch
-        :param paper_properties: List of paper properties of the batch
+        :param papers: List of papers
         """
         # ensure open connection
         if not self._driver:
             raise RuntimeError("Database driver is not initialized")
 
         # convert to nodes
-        paper_nodes: List[Node] = [Node.create(NodeType.PAPER, props) for props in paper_properties]
+        paper_nodes: List[Node] = [Node.create(NodeType.PAPER, asdict(p)) for p in papers]
+        query = _format_paper_batch_insert_query(paper_nodes)
+
+        # batch insert
+        with self._driver.session() as session:
+            session.run(query,
+                        papers=[{'match_id': node.match_id, **node.required_properties, **node.properties}
+                                for node in paper_nodes])
+
+    def _insert_paper_batch(self,
+                            source_node: Node,
+                            rel_type: RelationshipType,
+                            papers: List[PaperDTO]) -> None:
+        """
+        Batch insert a list of papers found by a source
+
+        :param source_node: Source node that found this batch of papers
+        :param rel_type: Relationship of source node to batch
+        :param papers: List of papers
+        """
+        # ensure open connection
+        if not self._driver:
+            raise RuntimeError("Database driver is not initialized")
+
+        # convert to nodes
+        paper_nodes: List[Node] = [Node.create(NodeType.PAPER, asdict(p)) for p in papers]
         query_body = _format_paper_batch_insert_query(paper_nodes)
 
         # construct the final query
@@ -241,23 +250,102 @@ class PaperDatabase(Neo4jDatabase):
                         papers=[{'match_id': node.match_id, **node.required_properties, **node.properties}
                                 for node in paper_nodes])
 
-    def get_all_unprocessed_pdf_urls(self) -> List[Tuple[str, str]]:
+    def get_unprocessed_pdf_urls(self, run_id: int = None, paper_limit: int = None) -> List[PaperDTO]:
         """
         Get all papers with pdfs that haven't been processed by grobid yet
+        If the run_id is provided, the list of papers are returned in order to most to least
+        relevant determined by original openalex query
 
+        :param run_id: Optional run the paper was discovered in (Default: None)
+        :param paper_limit: Limit the max number of papers to return (Default: None)
         :return: List of paper titles and pdf urls
         """
+        # base query
         query = f"""
-            MATCH (p:{NodeType.PAPER.value}) 
             WHERE p.pdf_url IS NOT NULL 
+            AND p.download_status IS NULL 
             AND p.grobid_status IS NULL 
             AND p.is_open_access 
             RETURN p.id AS id, p.pdf_url AS pdf_url
             """
-        # todo - add time filters
+
+        # order by run rank if provided
+        prefix = f"MATCH (run:{NodeType.RUN.value} {{id: $run_id}})-[r:{RelationshipType.ADDED.value}]->(p:{NodeType.PAPER.value})" if run_id else f"MATCH (p:{NodeType.PAPER.value})"
+        query = f"{prefix} {query}"
+        if run_id:
+            query = f"{query} ORDER BY r.rank"
+
+        # add limit if provided
+        if paper_limit:
+            query = f"{query} LIMIT {paper_limit}"
+
+        # exe query
         with self._driver.session() as session:
-            results = session.run(query)
-            return [(r['id'], r['pdf_url']) for r in results]
+            results = session.run(query, run_id=run_id) if run_id else session.run(query)
+            return [PaperDTO(r['id'], pdf_url=r['pdf_url']) for r in results]
+
+    def search_by_prompt_papers(self, prompt: str, paper_limit: int = 100, min_score: float = None) -> List[
+        Tuple[PaperDTO, float]]:
+        """
+        Get papers with abstracts that best match the prompt
+        The similarity score can range from 1 (exact match) and -1 (complete opposite match)
+
+        :param prompt: Search prompt
+        :param paper_limit: Limit the max number of papers to return (Default: 100)
+        :param min_score: Minimum similarity score of prompt to abstract, must be [-1,1] (Default: None but 0.4 recommended)
+        :raises ValueError: If provided min_score is outside [-1,1] range
+        :return: List of top_k paper titles that best match the given prompt and their score
+        """
+        # validate min score
+        if min_score and (min_score > 1 or min_score < -1):
+            raise ValueError("Param 'min_score' must be between -1 and 1")
+
+        prompt_embedding = self._embedding_model.encode(prompt, show_progress_bar=False).tolist()
+        query = f"""
+        CALL db.index.vector.queryNodes(
+          'paper_abstract_index',
+          $topK,
+          $embedding
+        ) YIELD node, score
+        WHERE node.grobid_status = 200 {'AND score > $minScore' if min_score else ''}
+        RETURN node.id AS id, score AS score
+        ORDER BY score DESC
+        """
+        # set params
+        params: Dict[str, Any] = {'topK': paper_limit, 'embedding': prompt_embedding}
+        if min_score:
+            params['minScore'] = min_score
+        # exe query
+        with self._driver.session() as session:
+            results = session.run(query, **params)
+            return [(PaperDTO(r['id']), r['score']) for r in results]
+
+    def get_unprocessed_citations(self, source_title: str, top_k: int = None) -> List[CitationDTO]:
+        """
+        Get the most referenced citations for a given paper
+
+        :param source_title: Title of paper that cites these papers
+        :param top_k: Number of unprocessed citations to get, ranked total number of references (Default: All)
+        :return: List of citation title, doi, and current citation count
+        """
+        query = f"""
+        MATCH (s:{NodeType.PAPER.value})-[:{RelationshipType.REFERENCES.value}]->(c:{NodeType.PAPER.value})
+        WHERE s.id = $source_title
+        WITH c
+        MATCH (any_paper:{NodeType.PAPER.value})-[:{RelationshipType.REFERENCES.value}]->(c)
+        WHERE c.download_status IS NULL AND c.openalex_status IS NULL
+        RETURN c.id AS id, c.doi AS doi, count(any_paper) AS citations
+        ORDER BY citations DESC
+        {'LIMIT $topK' if top_k else ''}
+        """
+        # set params
+        params: Dict[str, Any] = {'source_title': source_title}
+        if top_k:
+            params['topK'] = top_k
+        # exe query
+        with self._driver.session() as session:
+            results = session.run(query, **params)
+            return [CitationDTO(r['id'], r['doi'], r['citations']) for r in results]
 
 
 def _is_model_local(embedding_model: str) -> bool:
