@@ -1,7 +1,10 @@
+import json
 import math
 from collections import deque
 from dataclasses import dataclass
-from typing import List
+from typing import List, Dict
+
+from pydantic.v1 import JsonError
 
 from ai.model import ModelClient
 from openalex.dto import PaperDTO
@@ -19,6 +22,24 @@ Description: Rank papers based on the relevance of their abstracts
 AVG_TOKEN_PER_WORD = 1.2
 MIN_ABSTRACT_PER_COMPARISON = 2
 RESERVED_TOKENS = 1000
+RANK_CONTEXT_FILE = "snowsearch/prompts/rank_abstract.prompt"
+
+MAX_RETRIES = 3
+
+
+class ExceedMaxRankingGenerationAttemptsError(Exception):
+    def __init__(self, model: str):
+        """
+        Failed to generate valid ranking
+
+        :param model: Model used to attempt to generate ranking
+        """
+        super().__init__(f"Exceeded abstract ranking generation using '{model}'")
+        self._model = model
+
+    @property
+    def model(self) -> str:
+        return self._model
 
 
 @dataclass
@@ -50,6 +71,10 @@ class AbstractRanker:
         self._context_window_budget = context_window - RESERVED_TOKENS  # reserve tokens for one-shot
         self._abstracts_per_comparison = abstracts_per_comparison
         self._token_per_word = token_per_word
+
+        # load content for one-shot
+        with open(RANK_CONTEXT_FILE, 'r') as f:
+            self._rank_context = f.read()
 
     def _estimate_tokens(self, text: str) -> int:
         """
@@ -97,21 +122,61 @@ class AbstractRanker:
 
         return bins
 
-    def _filter_abstracts(self, abstracts: List[AbstractDTO], min_abstracts: int) -> List[AbstractDTO]:
+    def _rank_abstracts(self, prompt: str, abstracts: List[AbstractDTO]) -> Dict[str, AbstractDTO]:
+        """
+        Use an LLM to rank abstracts from most to least relevant based on the provided prompt
+
+        :param prompt: Natural language query for papers
+        :raises ExceedMaxRankingGenerationAttemptsError: If fail to extract ranking from model reply
+        :return: Dict with ordered abstract rankings
+        """
+        # format prompt
+        final_prompt = "\n"
+        for a in abstracts:
+            final_prompt += f"Title:\n{a.id}\nAbstract:\n{a.abstract.strip()}\n\n"
+
+        final_prompt += f"Search:\n{prompt.strip()}"
+
+        context = self._rank_context.replace("{total_abstracts}", str(len(abstracts)))
+        # error if exceed retries
+        for attempt in range(0, MAX_RETRIES):
+            completion, timer = self._model_client.prompt(
+                messages=[
+                    {"role": "system", "content": context},
+                    {"role": "user", "content": final_prompt}
+                ],
+                temperature=0
+            )
+            '''
+            Attempt to extract the ranking from the response. 
+            This is to safeguard against wordy and descriptive replies 
+            '''
+            try:
+                return json.loads(completion.choices[0].message.content.strip())
+            except JsonError:
+                # else retry
+                if attempt + 1 < MAX_RETRIES:
+                    logger.warn("Failed to generate ranking, retrying. . .")
+                    continue
+        # error if exceed retries
+        raise ExceedMaxRankingGenerationAttemptsError(self._model_client.model)
+
+    def _filter_abstracts(self, prompt: str, abstracts: List[AbstractDTO], min_abstracts: int) -> List[AbstractDTO]:
         """
         Filter abstracts tournament style to get the top most relevant papers
 
+        :param prompt: Search prompt to match
         :param abstracts: List of abstracts to filter
         :param min_abstracts: Minimum abstracts that must be returned
         :return: List of top abstracts
         """
 
         round_num = 0
+        title_lookup = {a.id: a for a in abstracts}
         current_abstracts = abstracts
         logger.info(f"Filtering {len(current_abstracts)} papers")
         timer = Timer()
         while True:
-            logger.info(f"Round {round_num + 1}: {len(current_abstracts)} papers remain")
 
             # Step 1: Bin packing
             bins = self._bin_pack_min_bins(current_abstracts)
@@ -120,12 +185,13 @@ class AbstractRanker:
             if len(bins) <= min_abstracts:
                 break
 
+            logger.info(f"Round {round_num + 1}: {len(current_abstracts)} papers remain")
+
             # Step 2: Select one from each bin
             selected = []
-            for b in bins:
-                # TODO: Replace with LLM-based selection
-                winner = min(b, key=lambda x: x.tokens)  # Placeholder for best-in-bin
-                selected.append(winner)
+            for b in logger.get_data_queue(bins, f"Round {round_num + 1} | Ranking with LLM", "ranking"):
+                results = self._rank_abstracts(prompt, b)
+                selected.append(title_lookup.get(results.get('1')))  # get the best ranked abstract
 
             current_abstracts = selected
             round_num += 1
@@ -133,7 +199,7 @@ class AbstractRanker:
         logger.info(f"Completed filtering in {timer.format_time()}s | {len(current_abstracts)} papers remain")
         return current_abstracts
 
-    def rank_papers(self, prompt: str, papers: List[PaperDTO], top_n: int) -> List[AbstractDTO]:
+    def rank_papers(self, prompt: str, papers: List[PaperDTO], top_n: int) -> List[PaperDTO]:
         """
         Rank a list of papers using an llm
 
@@ -147,6 +213,13 @@ class AbstractRanker:
             AbstractDTO(p.id, p.abstract_text, self._estimate_tokens(p.abstract_text))
             for p in papers
         ]
-        top_abstracts = self._filter_abstracts(abstracts, top_n)
-        # TODO: Replace with LLM-based selection
-        return sorted(top_abstracts, key=lambda x: x.tokens)[:top_n]
+        # get top abstracts
+        top_abstracts = self._filter_abstracts(prompt, abstracts, top_n)
+        logger.info(f"Performing final ranking")
+        timer = Timer()
+        ranked_abstracts = self._rank_abstracts(prompt, top_abstracts)
+        logger.info(f"Final ranking determined in {timer.stop()}s")
+
+        # create final ranking
+        return [PaperDTO(ranked_abstracts[a].id, abstract_text=ranked_abstracts[a].abstract)
+                for a in sorted(ranked_abstracts)]
