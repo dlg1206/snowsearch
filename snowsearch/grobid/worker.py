@@ -18,7 +18,7 @@ from util.logger import logger
 from util.timer import Timer
 
 """
-File: grobid_worker.py
+File: worker.py
 Description: 
 
 @author Derek Garcia

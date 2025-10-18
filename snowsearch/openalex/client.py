@@ -17,7 +17,7 @@ from openalex.exception import MissingOpenAlexEntryError, ExceedMaxQueryGenerati
 from util.logger import logger
 
 """
-File: openalex_client.py
+File: client.py
 Description: Client for interacting with the OpenAlex Database
 
 https://docs.openalex.org/
