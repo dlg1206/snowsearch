@@ -196,6 +196,26 @@ class PaperDatabase(Neo4jDatabase):
         # wrapper to keep relationship logic internal
         self._insert_paper_batch(Node.create(NodeType.PAPER, {'id': source_title}), RelationshipType.REFERENCES, papers)
 
+    def insert_paper_batch(self, papers: List[PaperDTO]) -> None:
+        """
+        Batch insert a list of papers
+
+        :param papers: List of papers
+        """
+        # ensure open connection
+        if not self._driver:
+            raise RuntimeError("Database driver is not initialized")
+
+        # convert to nodes
+        paper_nodes: List[Node] = [Node.create(NodeType.PAPER, asdict(p)) for p in papers]
+        query = _format_paper_batch_insert_query(paper_nodes)
+
+        # batch insert
+        with self._driver.session() as session:
+            session.run(query,
+                        papers=[{'match_id': node.match_id, **node.required_properties, **node.properties}
+                                for node in paper_nodes])
+
     def _insert_paper_batch(self,
                             source_node: Node,
                             rel_type: RelationshipType,
@@ -227,8 +247,8 @@ class PaperDatabase(Neo4jDatabase):
         with self._driver.session() as session:
             session.run(query,
                         match_id=source_node.match_id,
-                        papers=[{'match_id': node.match_id, **node.required_properties, **node.properties} for node in
-                                paper_nodes])
+                        papers=[{'match_id': node.match_id, **node.required_properties, **node.properties}
+                                for node in paper_nodes])
 
     def get_unprocessed_pdf_urls(self, run_id: int = None, paper_limit: int = None) -> List[PaperDTO]:
         """

@@ -14,6 +14,8 @@ DEFAULT_RATE_LIMIT_SLEEP = 1
 POLITE_RATE_LIMIT_SLEEP = 0.1
 # https://docs.openalex.org/how-to-use-the-api/get-lists-of-entities/paging?q=per_page#basic-paging
 MAX_PER_PAGE = 200
+# https://docs.openalex.org/api-guide-for-llms#bulk-lookup-by-dois
+MAX_DOI_PER_PAGE = 50
 
 NL_TO_QUERY_CONTEXT_FILE = "snowsearch/prompts/nl_to_elasticsearch_query.prompt"
 QUERY_JSON_RE = re.compile(r'\{\n.*"query": "(.*?)"')
