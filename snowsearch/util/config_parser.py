@@ -23,8 +23,8 @@ DEFAULT_CONFIG_PATH = "config.yaml"
 
 @dataclass
 class AgentConfigDTO:
-    model: str
-    tag: str = "latest"
+    model_name: str
+    model_tag: str = "latest"
     ollama_host: str = ollama.DEFAULT_HOST
     ollama_port: int = ollama.DEFAULT_PORT
 
