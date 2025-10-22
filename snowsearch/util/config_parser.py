@@ -5,7 +5,9 @@ from typing import Dict, Any
 import yaml
 
 from ai import ollama
-from grobid.config import MAX_GROBID_REQUESTS, MAX_CONCURRENT_DOWNLOADS, MAX_PDF_COUNT
+from ai.ollama import OLLAMA_HOST_ENV, OLLAMA_PORT_ENV
+from ai.openai import OPENAI_API_KEY_ENV
+from grobid.config import MAX_GROBID_REQUESTS, MAX_CONCURRENT_DOWNLOADS, MAX_PDF_COUNT, GROBID_SERVER_ENV
 from rank.config import MIN_ABSTRACT_PER_COMPARISON, AVG_TOKEN_PER_WORD
 
 """
@@ -17,11 +19,6 @@ Description: Load config yaml file into series of DTOs
 """
 
 DEFAULT_CONFIG_PATH = "config.yaml"
-
-OPENAI_API_KEY_ENV = "OPENAI_API_KEY"
-OLLAMA_HOST_ENV = "OLLAMA_HOST"
-OLLAMA_PORT_ENV = "OLLAMA_PORT"
-GROBID_SERVER_ENV = "GROBID_SERVER"
 
 
 @dataclass
@@ -94,37 +91,37 @@ class Config:
         # load query generation config
         if 'query_generation' not in config:
             raise KeyError("Missing required key 'query_generation'")
-        self._query_generation_config = _load_agent_config('query_generation.agent',
-                                                           config['query_generation'].get('agent'))
+        self._query_generation = _load_agent_config('query_generation.agent',
+                                                    config['query_generation'].get('agent'))
 
         # load abstract ranking config
         if 'abstract_ranking' not in config:
             raise KeyError("Missing required key 'abstract_ranking'")
-        self._ranking_config = _load_ranking_config('abstract_ranking', config['abstract_ranking'])
+        self._ranking = _load_ranking_config('abstract_ranking', config['abstract_ranking'])
 
         # load openalex config
         if 'openalex' in config:
-            self._openalex_config = _load_openalex_config(config['openalex'])
+            self._openalex = _load_openalex_config(config['openalex'])
 
         # load grobid config
         if 'grobid' in config:
-            self._grobid_config = _load_grobid_config(config['grobid'])
+            self._grobid = _load_grobid_config(config['grobid'])
 
     @property
-    def query_generation_config(self) -> AgentConfigDTO:
-        return self._query_generation_config
+    def query_generation(self) -> AgentConfigDTO:
+        return self._query_generation
 
     @property
-    def ranking_config(self) -> RankingConfigDTO:
-        return self._ranking_config
+    def ranking(self) -> RankingConfigDTO:
+        return self._ranking
 
     @property
-    def openalex_config(self) -> OpenAlexConfigDTO:
-        return self._openalex_config
+    def openalex(self) -> OpenAlexConfigDTO:
+        return self._openalex
 
     @property
-    def grobid_config(self) -> GrobidConfigDTO:
-        return self._grobid_config
+    def grobid(self) -> GrobidConfigDTO:
+        return self._grobid
 
 
 def _load_agent_config(key: str, config: Dict[str, Any]) -> AgentConfigDTO:

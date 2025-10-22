@@ -27,8 +27,8 @@ class AbstractRanker:
     def __init__(self,
                  model_client: ModelClient,
                  context_window: int,
-                 abstracts_per_comparison: int,
-                 tokens_per_word: int):
+                 abstracts_per_comparison: int = MIN_ABSTRACT_PER_COMPARISON,
+                 tokens_per_word: float = AVG_TOKEN_PER_WORD):
         """
         Create new Abstract ranker
 

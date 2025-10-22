@@ -10,7 +10,8 @@ from aiohttp import ClientSession, ClientResponseError
 from grobid_client.grobid_client import GrobidClient
 
 from db.paper_database import PaperDatabase
-from grobid.config import MAX_CONCURRENT_DOWNLOADS, MAX_PDF_COUNT, KILOBYTE, DOWNLOAD_HEADERS, MAX_RETRIES, PDF_MAGIC
+from grobid.config import MAX_CONCURRENT_DOWNLOADS, MAX_PDF_COUNT, KILOBYTE, DOWNLOAD_HEADERS, MAX_RETRIES, PDF_MAGIC, \
+    MAX_GROBID_REQUESTS
 from grobid.dto import GrobidDTO, CitationDTO
 from grobid.exception import PaperDownloadError, GrobidProcessError, NoFileDataError, InvalidFileFormatError
 from openalex.dto import PaperDTO
@@ -29,19 +30,25 @@ logging.getLogger("grobid_client").setLevel(logging.CRITICAL + 1)  # todo doesn'
 
 
 class GrobidWorker:
-    def __init__(self, config: Dict[str, str | int | List[str] | None] = None):
+    def __init__(self,
+                 max_grobid_requests: int = MAX_GROBID_REQUESTS,
+                 max_concurrent_downloads: int = MAX_CONCURRENT_DOWNLOADS,
+                 max_local_pdfs: int = MAX_PDF_COUNT,
+                 client_config: Dict[str, Any] = None):
         """
         Create new Grobid worker to download and process urls
 
-        :param config: Grobid config file
+        :param max_grobid_requests: Max number of requests allowed to be made to the grobid server at a time (Default: 1)
+        :param max_concurrent_downloads: Max number of PDFs to allowed to download at the same time (Default: 10)
+        :param max_local_pdfs: Max number of PDFs to be downloaded locally at one time (Default: 100)
+        :param client_config: Optional Grobid client details (Default: None)
         """
-        if config:
-            self._grobid_client = GrobidClient(**config)
-        else:
-            self._grobid_client = GrobidClient()
-        self._grobid_semaphore = Semaphore()  # todo config to handle max requests at one time
-        self._download_semaphore = Semaphore(MAX_CONCURRENT_DOWNLOADS)  # todo config to handle max requests at one time
-        self._pdf_file_semaphore = Semaphore(MAX_PDF_COUNT)  # todo config to handle max requests at one time
+        # init with params if provided
+        self._grobid_client = GrobidClient(**client_config) if client_config else GrobidClient()
+        # set semaphore limits
+        self._grobid_semaphore = Semaphore(max_grobid_requests)
+        self._download_semaphore = Semaphore(max_concurrent_downloads)
+        self._pdf_file_semaphore = Semaphore(max_local_pdfs)
 
     async def _download_pdf(self, session: ClientSession, title: str, pdf_url: str, output_path: str) -> None:
         """

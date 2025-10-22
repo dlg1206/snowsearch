@@ -23,6 +23,9 @@ MODEL_LIBRARY = "https://ollama.com/library"
 MODEL_DOWNLOAD_ENDPOINT = "api/pull"
 MODEL_VIEW_ENDPOINT = "api/show"
 
+OLLAMA_HOST_ENV = "OLLAMA_HOST"
+OLLAMA_PORT_ENV = "OLLAMA_PORT"
+
 
 class InvalidOllamaServerError(Exception):
     def __init__(self, ollama_url: str):
