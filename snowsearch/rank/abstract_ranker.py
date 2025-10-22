@@ -1,52 +1,25 @@
 import json
 import math
 from collections import deque
-from dataclasses import dataclass
+from json import JSONDecodeError
 from typing import List, Dict
-
-from pydantic.v1 import JsonError
 
 from ai.model import ModelClient
 from openalex.dto import PaperDTO
+from rank.config import MIN_ABSTRACT_PER_COMPARISON, AVG_TOKEN_PER_WORD, RANK_CONTEXT_FILE, TOKEN_BUFFER_MODIFIER, \
+    MAX_RETRIES
+from rank.dto import AbstractDTO
+from rank.exception import ExceedMaxRankingGenerationAttemptsError
 from util.logger import logger
 from util.timer import Timer
 
 """
-File: rank.py
+File: abstract_ranker.py
 
 Description: Rank papers based on the relevance of their abstracts
 
 @author Derek Garcia
 """
-
-AVG_TOKEN_PER_WORD = 1.2
-MIN_ABSTRACT_PER_COMPARISON = 2
-RESERVED_TOKENS = 1000
-RANK_CONTEXT_FILE = "snowsearch/prompts/rank_abstract.prompt"
-
-MAX_RETRIES = 3
-
-
-class ExceedMaxRankingGenerationAttemptsError(Exception):
-    def __init__(self, model: str):
-        """
-        Failed to generate valid ranking
-
-        :param model: Model used to attempt to generate ranking
-        """
-        super().__init__(f"Exceeded abstract ranking generation using '{model}'")
-        self._model = model
-
-    @property
-    def model(self) -> str:
-        return self._model
-
-
-@dataclass
-class AbstractDTO:
-    id: str
-    abstract: str
-    tokens: int
 
 
 class AbstractRanker:
@@ -68,13 +41,16 @@ class AbstractRanker:
         :param token_per_word: Average tokens per word to use for window estimation
         """
         self._model_client = model_client
-        self._context_window_budget = context_window - RESERVED_TOKENS  # reserve tokens for one-shot
         self._abstracts_per_comparison = abstracts_per_comparison
         self._token_per_word = token_per_word
 
         # load content for one-shot
         with open(RANK_CONTEXT_FILE, 'r') as f:
             self._rank_context = f.read()
+
+        # reserve tokens for one-shot
+        self._context_window_budget = context_window - math.ceil(
+            self._estimate_tokens(self._rank_context) * TOKEN_BUFFER_MODIFIER)
 
     def _estimate_tokens(self, text: str) -> int:
         """
@@ -133,11 +109,17 @@ class AbstractRanker:
         # format prompt
         final_prompt = "\n"
         for a in abstracts:
-            final_prompt += f"Title:\n{a.id}\nAbstract:\n{a.abstract.strip()}\n\n"
+            final_prompt += f"Title:\n{a.id}\nAbstract:\n{a.text}\n\n"
 
         final_prompt += f"Search:\n{prompt.strip()}"
 
         context = self._rank_context.replace("{total_abstracts}", str(len(abstracts)))
+
+        # warn if exceed budget
+        total_tokens = self._estimate_tokens(final_prompt) + self._estimate_tokens(context)
+        if total_tokens > self._context_window_budget:
+            logger.warn(f"Exceeded context budget by {total_tokens} tokens, ranking may be impacted")
+
         # error if exceed retries
         for attempt in range(0, MAX_RETRIES):
             completion, timer = self._model_client.prompt(
@@ -153,7 +135,7 @@ class AbstractRanker:
             '''
             try:
                 return json.loads(completion.choices[0].message.content.strip())
-            except JsonError:
+            except JSONDecodeError:
                 # else retry
                 if attempt + 1 < MAX_RETRIES:
                     logger.warn("Failed to generate ranking, retrying. . .")
@@ -221,5 +203,5 @@ class AbstractRanker:
         logger.info(f"Final ranking determined in {timer.stop()}s")
 
         # create final ranking
-        return [PaperDTO(ranked_abstracts[a].id, abstract_text=ranked_abstracts[a].abstract)
+        return [PaperDTO(ranked_abstracts[a].id, abstract_text=ranked_abstracts[a].text)
                 for a in sorted(ranked_abstracts)]

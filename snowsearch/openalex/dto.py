@@ -30,3 +30,6 @@ class PaperDTO:
     def __post_init__(self):
         if self.doi:
             self.doi = self.doi.removeprefix(DOI_PREFIX)
+
+        if self.abstract_text:
+            self.abstract_text = self.abstract_text.strip()
