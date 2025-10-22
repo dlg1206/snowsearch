@@ -19,7 +19,7 @@ from util.timer import Timer
 
 """
 File: worker.py
-Description: 
+Description: Grobid worker that handles downloading and processing open access papers
 
 @author Derek Garcia
 """

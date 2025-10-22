@@ -8,8 +8,9 @@ Description: Defaults for Grobid
 # grobid server details
 DEFAULT_HOST = "localhost"
 DEFAULT_PORT = 8070
+MAX_GROBID_REQUESTS = 1
 # download details
-MAX_CONCURRENT_DOWNLOADS = 10  # todo add config option
+MAX_CONCURRENT_DOWNLOADS = 10
 MAX_PDF_COUNT = 100  # max pdfs allowed to be downloaded at a time
 PDF_MAGIC = b'%PDF-'  # header bytes of pdf
 MAX_RETRIES = 3

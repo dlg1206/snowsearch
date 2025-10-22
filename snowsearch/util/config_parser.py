@@ -5,6 +5,7 @@ from typing import Dict, Any
 import yaml
 
 from ai import ollama
+from grobid.config import MAX_GROBID_REQUESTS, MAX_CONCURRENT_DOWNLOADS, MAX_PDF_COUNT
 from rank.config import MIN_ABSTRACT_PER_COMPARISON, AVG_TOKEN_PER_WORD
 
 """
@@ -20,6 +21,7 @@ DEFAULT_CONFIG_PATH = "config.yaml"
 OPENAI_API_KEY_ENV = "OPENAI_API_KEY"
 OLLAMA_HOST_ENV = "OLLAMA_HOST"
 OLLAMA_PORT_ENV = "OLLAMA_PORT"
+GROBID_SERVER_ENV = "GROBID_SERVER"
 
 
 @dataclass
@@ -63,7 +65,23 @@ class OpenAlexConfigDTO:
 
 @dataclass
 class GrobidConfigDTO:
-    pass
+    client_params: Dict[str, Any] = None
+    max_grobid_requests: int = MAX_GROBID_REQUESTS
+    max_concurrent_downloads: int = MAX_CONCURRENT_DOWNLOADS
+    max_local_pdfs: int = MAX_PDF_COUNT
+
+    def __post_init__(self):
+        # check requests
+        if self.max_grobid_requests < 1:
+            raise ValueError("Must make at least one request to Grobid server")
+
+        # check downloads
+        if self.max_concurrent_downloads < 1:
+            raise ValueError("Must make at least one paper download request")
+
+        # check load pdfs
+        if self.max_local_pdfs < 1:
+            raise ValueError("Must have at least one paper downloaded at a time")
 
 
 class Config:
@@ -85,12 +103,28 @@ class Config:
         self._ranking_config = _load_ranking_config('abstract_ranking', config['abstract_ranking'])
 
         # load openalex config
-        if 'openalex' not in config:
-            raise KeyError("Missing required key 'openalex'")
-        self._openalex_config = _load_openalex_config('openalex', config['openalex'])
+        if 'openalex' in config:
+            self._openalex_config = _load_openalex_config(config['openalex'])
 
-    def load_grobid_config(self) -> GrobidConfigDTO:
-        pass
+        # load grobid config
+        if 'grobid' in config:
+            self._grobid_config = _load_grobid_config(config['grobid'])
+
+    @property
+    def query_generation_config(self) -> AgentConfigDTO:
+        return self._query_generation_config
+
+    @property
+    def ranking_config(self) -> RankingConfigDTO:
+        return self._ranking_config
+
+    @property
+    def openalex_config(self) -> OpenAlexConfigDTO:
+        return self._openalex_config
+
+    @property
+    def grobid_config(self) -> GrobidConfigDTO:
+        return self._grobid_config
 
 
 def _load_agent_config(key: str, config: Dict[str, Any]) -> AgentConfigDTO:
@@ -155,3 +189,22 @@ def _load_openalex_config(config: Dict[str, Any]) -> OpenAlexConfigDTO:
     :return: Open Alex DTO
     """
     return OpenAlexConfigDTO(config.get('email'))
+
+
+def _load_grobid_config(config: Dict[str, Any]) -> GrobidConfigDTO:
+    """
+    Load grobid details from config
+
+    :param config: Dict of the grobid details
+    :return: Grobid DTO
+    """
+    # use env var if available
+    client_params = config.get('client_config', {})
+    if os.getenv(GROBID_SERVER_ENV):
+        client_params['grobid_server'] = os.getenv(GROBID_SERVER_ENV)
+
+    # return dto
+    return GrobidConfigDTO(client_params,
+                           config.get('max_grobid_requests', MAX_GROBID_REQUESTS),
+                           config.get('max_concurrent_downloads', MAX_CONCURRENT_DOWNLOADS),
+                           config.get('max_local_pdfs', MAX_PDF_COUNT))

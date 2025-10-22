@@ -65,33 +65,48 @@ openalex:
   # https://docs.openalex.org/how-to-use-the-api/rate-limits-and-authentication#the-polite-pool
   # email:
 
-# Config for grobid python client
-# https://github.com/kermitt2/grobid-client-python?tab=readme-ov-file#default-configuration
+# Config for Grobid
+# https://github.com/kermitt2/grobid
 grobid:
-  # Host and port of a grobid server, will default to 'localhost:8070'
-  # Useful if grobid server is not running locally, ie running on a remote host with more resources available
-  # Superseded by the GROBID_SERVER env variable
-  # grobid_server:
+  # Config for grobid python client
+  # https://github.com/kermitt2/grobid-client-python?tab=readme-ov-file#default-configuration
+  client_config:
+    # Host and port of a grobid server, will default to 'localhost:8070'
+    # Useful if grobid server is not running locally, ie running on a remote host with more resources available
+    # Superseded by the GROBID_SERVER env variable
+    # grobid_server:
 
-  # Thread pool size.
-  # Tune carefully: a large batch size will result in the data being written less frequently
-  # Default is 1000
-  # batch_size:
+    # Thread pool size.
+    # Tune carefully: a large batch size will result in the data being written less frequently
+    # Default is 1000
+    # batch_size:
 
-  # Wait time when server is busy (seconds)
-  # Default is 5
-  # sleep_time:
+    # Wait time when server is busy (seconds)
+    # Default is 5
+    # sleep_time:
 
-  # Client-side timeout (seconds)
-  # Default is 180
-  # timeout:
+    # Client-side timeout (seconds)
+    # Default is 180
+    # timeout:
 
-  # List of TEI XML elements for which GROBID should extract coordinates (bounding boxes), ie x y location in pdf.
-  # Defaults are
-  # - persName
-  # - figure
-  # - ref
-  # - biblStruct
-  # - formula
-  # - s
-  # coordinates:
+    # List of TEI XML elements for which GROBID should extract coordinates (bounding boxes), ie x y location in pdf.
+    # Defaults are
+    # - persName
+    # - figure
+    # - ref
+    # - biblStruct
+    # - formula
+    # - s
+    # coordinates:
+
+  # Max number of requests allowed to be made to the grobid server at a time
+  # Default is 1
+  # max_grobid_requests:
+
+  # Max number of PDFs to allowed to download at the same time
+  # Default is 10
+  # max_concurrent_downloads:
+
+  # Max number of PDFs to be downloaded locally at one time
+  # Default is 100
+  # max_local_pdfs:
