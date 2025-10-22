@@ -38,6 +38,8 @@ class AgentConfigDTO:
 class RankingConfigDTO:
     agent_config: AgentConfigDTO
     context_window: int
+    min_abstract_score: float
+    abstract_limit: int = 100
     abstracts_per_comparison: int = None
     tokens_per_word: float = None
 
@@ -81,6 +83,27 @@ class GrobidConfigDTO:
             raise ValueError("Must have at least one paper downloaded at a time")
 
 
+@dataclass
+class SnowballConfigDTO:
+    rounds: int
+    min_abstract_score: float
+    seed_paper_limit: int = None
+    citations_per_paper: int = None
+
+    def __post_init__(self):
+        if self.rounds < 0:
+            raise ValueError("Snowball rounds cannot be negative")
+
+        if self.min_abstract_score < -1 or self.min_abstract_score > 1:
+            raise ValueError("Min abstract score must between -1 and 1")
+
+        if self.seed_paper_limit and self.seed_paper_limit < 1:
+            raise ValueError("Seed round needs at least 1 paper")
+
+        if self.citations_per_paper and self.citations_per_paper < 1:
+            raise ValueError("Papers need at least 1 citation per paper")
+
+
 class Config:
 
     def __init__(self, config_file: str = DEFAULT_CONFIG_PATH) -> None:
@@ -88,14 +111,19 @@ class Config:
         with open(config_file, 'r') as file:
             config = yaml.safe_load(file)
 
+        # load snowball config
+        if not config.get('snowball'):
+            raise KeyError("Missing required key 'snowball'")
+        self._snowball = _load_snowball_config('snowball', config['snowball'])
+
         # load query generation config
-        if 'query_generation' not in config:
+        if not config.get('query_generation'):
             raise KeyError("Missing required key 'query_generation'")
         self._query_generation = _load_agent_config('query_generation.agent',
                                                     config['query_generation'].get('agent'))
 
         # load abstract ranking config
-        if 'abstract_ranking' not in config:
+        if not config.get('abstract_ranking'):
             raise KeyError("Missing required key 'abstract_ranking'")
         self._ranking = _load_ranking_config('abstract_ranking', config['abstract_ranking'])
 
@@ -104,6 +132,10 @@ class Config:
 
         # load grobid config if data, else use default
         self._grobid = _load_grobid_config(config['grobid']) if config.get('grobid') else GrobidConfigDTO()
+
+    @property
+    def snowball(self) -> SnowballConfigDTO:
+        return self._snowball
 
     @property
     def query_generation(self) -> AgentConfigDTO:
@@ -122,6 +154,27 @@ class Config:
         return self._grobid
 
 
+def _load_snowball_config(key: str, config: Dict[str, Any]) -> SnowballConfigDTO:
+    """
+    Load snowball details from config
+
+    :param key: Root of config
+    :param config: Dict of snowball details
+    :return: Snowball DTO
+    """
+    # ensure required keys are present
+    if not config.get('rounds'):
+        raise KeyError(f"Missing required key '{key}.rounds'")
+    if not config.get('min_abstract_score'):
+        raise KeyError(f"Missing required key '{key}.min_abstract_score'")
+
+    # return dto
+    return SnowballConfigDTO(config['rounds'],
+                             config['min_abstract_score'],
+                             config.get('seed_paper_limit'),
+                             config.get('citations_per_paper'))
+
+
 def _load_agent_config(key: str, config: Dict[str, Any]) -> AgentConfigDTO:
     """
     Load LLM agent details from config file
@@ -136,7 +189,7 @@ def _load_agent_config(key: str, config: Dict[str, Any]) -> AgentConfigDTO:
         raise KeyError(f"Missing required key '{key}")
 
     # ensure required keys are present
-    if "model" not in config:
+    if not config.get('model'):
         raise KeyError(f"Missing required key '{key}.model'")
 
     # use openai api
@@ -166,12 +219,16 @@ def _load_ranking_config(key: str, config: Dict[str, Any]) -> RankingConfigDTO:
     agent_config = _load_agent_config(f'{key}.agent', config.get('agent'))
 
     # load additional ranking details
-    if 'context_window' not in config:
+    if not config.get('context_window'):
         raise KeyError(f"Missing required key '{key}.context_window'")
+    if not config.get('min_abstract_score'):
+        raise KeyError(f"Missing required key '{key}.min_abstract_score'")
 
     # return dto
     return RankingConfigDTO(agent_config,
                             config['context_window'],
+                            config['min_abstract_score'],
+                            config.get('abstracts_limit', 100),
                             config.get('abstracts_per_comparison', MIN_ABSTRACT_PER_COMPARISON),
                             config.get('tokens_per_word', AVG_TOKEN_PER_WORD))
 
