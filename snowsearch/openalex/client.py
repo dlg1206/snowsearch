@@ -46,7 +46,7 @@ class OpenAlexClient:
         if os.getenv('OPENALEX_API_KEY'):
             self._api_key_available = True
             logger.info("Found OpenAlex API key")
-        # load content for few-shot
+        # load content for one-shot
         with open(NL_TO_QUERY_CONTEXT_FILE, 'r') as f:
             self._nl_to_query_context = f.read()
 
@@ -266,8 +266,12 @@ class OpenAlexClient:
                     logger.debug_msg(f"Found '{paper.id}' by title")
                 except MissingOpenAlexEntryError as e:
                     num_missing += 1
-                    logger.error_exp(MissingOpenAlexEntryError(e.doi, e.title))
+                    logger.error_exp(e)
                     paper_db.upsert_paper(PaperDTO(e.title, openalex_status=404))
+                except Exception as e:
+                    num_missing += 1
+                    logger.error_exp(e)
+
 
         # report results
         percent = lambda a, b: f"{(a / b) * 100:.01f}%"
@@ -276,7 +280,7 @@ class OpenAlexClient:
             f"Search complete, successfully updated {num_success} citations ({percent(num_success, len(citations))})")
         logger.info(f"Found {num_doi} citations by DOI ({percent(num_doi, len(citations))})")
         logger.info(f"Found {num_title} citations by title ({percent(num_title, len(citations))})")
-        logger.info(f"Failed to find {num_success} citations ({percent(num_missing, len(citations))})")
+        logger.info(f"Failed to find {num_missing} citations ({percent(num_missing, len(citations))})")
 
     def prompt_to_query(self, prompt: str) -> str:
         """
@@ -340,7 +344,7 @@ async def _fetch_title_wrapper(semaphore: Semaphore, citation: CitationDTO, call
     :param semaphore: Semaphore
     :param citation: Citation of Paper to fetch
     :param callback: Title fetch callback function
-    :raises MissingOpenAlexEntryError: If could not find paper byt title
+    :raises MissingOpenAlexEntryError: If could not find paper by title
     :return: Paper details
     """
     async with semaphore:

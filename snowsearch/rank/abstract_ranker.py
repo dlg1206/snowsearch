@@ -2,7 +2,7 @@ import json
 import math
 from collections import deque
 from json import JSONDecodeError
-from typing import List, Dict
+from typing import List
 
 from ai.model import ModelClient
 from openalex.dto import PaperDTO
@@ -28,7 +28,7 @@ class AbstractRanker:
                  model_client: ModelClient,
                  context_window: int,
                  abstracts_per_comparison: int = MIN_ABSTRACT_PER_COMPARISON,
-                 token_per_word: int = AVG_TOKEN_PER_WORD):
+                 tokens_per_word: float = AVG_TOKEN_PER_WORD):
         """
         Create new Abstract ranker
 
@@ -38,11 +38,11 @@ class AbstractRanker:
             If using a larger model, this can be increased to reduce the number of API calls made or kept low to keep a
             more detailed analysis of each abstract. For smaller models, keeping this number low keeps the abstracts
             within the smaller context window
-        :param token_per_word: Average tokens per word to use for window estimation
+        :param tokens_per_word: Average tokens per word to use for window estimation
         """
         self._model_client = model_client
         self._abstracts_per_comparison = abstracts_per_comparison
-        self._token_per_word = token_per_word
+        self._token_per_word = tokens_per_word
 
         # load content for one-shot
         with open(RANK_CONTEXT_FILE, 'r') as f:
@@ -98,18 +98,20 @@ class AbstractRanker:
 
         return bins
 
-    def _rank_abstracts(self, prompt: str, abstracts: List[AbstractDTO]) -> Dict[str, AbstractDTO]:
+    def _rank_abstracts(self, prompt: str, abstracts: List[AbstractDTO]) -> List[AbstractDTO]:
         """
         Use an LLM to rank abstracts from most to least relevant based on the provided prompt
 
         :param prompt: Natural language query for papers
         :raises ExceedMaxRankingGenerationAttemptsError: If fail to extract ranking from model reply
-        :return: Dict with ordered abstract rankings
+        :return: Ordered list of most relevant abstracts
         """
         # format prompt
         final_prompt = "\n"
+        abstract_lookup = {}
         for a in abstracts:
             final_prompt += f"Title:\n{a.id}\nAbstract:\n{a.text}\n\n"
+            abstract_lookup[a.id] = a
 
         final_prompt += f"Search:\n{prompt.strip()}"
 
@@ -122,6 +124,7 @@ class AbstractRanker:
 
         # error if exceed retries
         for attempt in range(0, MAX_RETRIES):
+            logger.debug_msg(f"Ranking {len(abstracts)} abstracts ({attempt + 1}/{MAX_RETRIES})")
             completion, timer = self._model_client.prompt(
                 messages=[
                     {"role": "system", "content": context},
@@ -134,7 +137,9 @@ class AbstractRanker:
             This is to safeguard against wordy and descriptive replies 
             '''
             try:
-                return json.loads(completion.choices[0].message.content.strip())
+                results = json.loads(completion.choices[0].message.content.strip())
+                # convert back to abstracts
+                return [abstract_lookup[aid] for _, aid in sorted(results.items(), key=lambda x: int(x[0]))]
             except JSONDecodeError:
                 # else retry
                 if attempt + 1 < MAX_RETRIES:
@@ -154,7 +159,6 @@ class AbstractRanker:
         """
 
         round_num = 0
-        title_lookup = {a.id: a for a in abstracts}
         current_abstracts = abstracts
         logger.info(f"Filtering {len(current_abstracts)} papers")
         timer = Timer()
@@ -168,12 +172,12 @@ class AbstractRanker:
                 break
 
             logger.info(f"Round {round_num + 1}: {len(current_abstracts)} papers remain")
+            logger.debug_msg(f"Processing {len(bins)} matches, comparing {min(bins, key=len)} to {max(bins, key=len)} abstracts per round")
 
             # Step 2: Select one from each bin
             selected = []
             for b in logger.get_data_queue(bins, f"Round {round_num + 1} | Ranking with LLM", "ranking"):
-                results = self._rank_abstracts(prompt, b)
-                selected.append(title_lookup.get(results.get('1')))  # get the best ranked abstract
+                selected.append(self._rank_abstracts(prompt, b)[0])  # get the best ranked abstract
 
             current_abstracts = selected
             round_num += 1
@@ -190,18 +194,27 @@ class AbstractRanker:
         :param top_n: Number of top papers to find
         :return: Ordered list of the most relevant to the prompt
         """
+        # guard against pointless prompting
+        match len(papers):
+            case 1:
+                logger.warn("Only one paper provided, skipping ranking")
+                return papers
+            case 0:
+                logger.error_msg("No papers provided, skipping ranking")
+                return papers
+
         # Convert to AbstractDTOs with token estimates
         abstracts = [
             AbstractDTO(p.id, p.abstract_text, self._estimate_tokens(p.abstract_text))
             for p in papers
         ]
-        # get top abstracts
-        top_abstracts = self._filter_abstracts(prompt, abstracts, top_n)
+        # filter papers if not enough to do final ranking
+        top_abstracts = self._filter_abstracts(prompt, abstracts, top_n) if len(abstracts) > top_n else abstracts
+
         logger.info(f"Performing final ranking")
         timer = Timer()
         ranked_abstracts = self._rank_abstracts(prompt, top_abstracts)
-        logger.info(f"Final ranking determined in {timer.stop()}s")
+        logger.info(f"Final ranking determined in {timer.format_time()}s")
 
-        # create final ranking
-        return [PaperDTO(ranked_abstracts[a].id, abstract_text=ranked_abstracts[a].text)
-                for a in sorted(ranked_abstracts)]
+        # convert back to papers
+        return [PaperDTO(a.id, abstract_text=a.text) for a in ranked_abstracts]

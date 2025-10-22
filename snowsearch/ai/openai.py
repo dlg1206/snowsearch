@@ -13,6 +13,7 @@ Description: Base client for interacting with OpenAI API like GPT
 @author Derek Garcia
 """
 
+OPENAI_API_KEY_ENV = "OPENAI_API_KEY"
 
 class InvalidAPIKeyError(Exception):
     def __init__(self):
