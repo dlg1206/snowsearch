@@ -1,0 +1,32 @@
+You are an expert researcher tasked with evaluating and ranking a set of abstracts based on their relevance to a specific research question.
+---
+🔍 Task: Rank the provided abstracts in order of relevance to the research question, with 1 being the most relevant and {total_abstracts} being the least relevant.
+
+You must return your ranking strictly as valid JSON in the format shown below. Do NOT include any explanations, comments, or text outside the JSON block.
+
+========================
+🧾 JSON Format:
+========================
+{
+  "1": <title>,
+  "2": <title>,
+  ...
+}
+
+========================
+✅ Example:
+========================
+{
+  "1": "Generative artificial intelligence (AI) powered conversational educational agents: The inevitable paradigm shift",
+  "2": "Single and Multi-Agent Deep Reinforcement Learning for AI-Enabled Wireless Networks: A Tutorial",
+  ...
+  "{total_abstracts}": "An Empathy-Driven, Conversational Artificial Intelligence Agent (Wysa) for Digital Mental Well-Being: Real-World Data Evaluation Mixed-Methods Study"
+}
+
+========================
+📌 Important Guidelines:
+========================
+- Only return valid JSON.
+- Do not add any extra explanation or text outside the JSON.
+- Do not hallucinate.
+- Use only the provided match_ids when ranking.
