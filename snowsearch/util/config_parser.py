@@ -5,8 +5,7 @@ from typing import Dict, Any
 import yaml
 
 from ai import ollama
-from openalex.config import NL_TO_QUERY_CONTEXT_FILE
-from rank.config import MIN_ABSTRACT_PER_COMPARISON, AVG_TOKEN_PER_WORD, RANK_CONTEXT_FILE
+from rank.config import MIN_ABSTRACT_PER_COMPARISON, AVG_TOKEN_PER_WORD
 
 """
 File: config_parser.py
@@ -27,15 +26,10 @@ OLLAMA_PORT_ENV = "OLLAMA_PORT"
 class AgentConfigDTO:
     model: str
     tag: str = "latest"
-    prompt_path: str = None
     ollama_host: str = ollama.DEFAULT_HOST
     ollama_port: int = ollama.DEFAULT_PORT
 
     def __post_init__(self):
-        # ensure path exists
-        if not os.path.exists(self.prompt_path):
-            raise ValueError(f"Could not find prompt file '{self.prompt_path}'")
-
         # check port
         if self.ollama_port <= 0:
             raise ValueError(f"{self.ollama_port} is an invalid port")
@@ -85,28 +79,25 @@ class Config:
         if 'agent' not in config['query_generation']:
             raise KeyError("Missing required key 'query_generation.agent'")
         self._query_generation_config = _load_agent_config('query_generation.agent',
-                                                           config['query_generation']['agent'],
-                                                           config.get('prompt_path', NL_TO_QUERY_CONTEXT_FILE))
+                                                           config['query_generation']['agent'])
 
         # load abstract ranking config
         if 'abstract_ranking' not in config:
             raise KeyError("Missing required key 'abstract_ranking'")
         self._ranking_config = _load_ranking_config('abstract_ranking', config['abstract_ranking'])
 
-    def load_openalex_config(self) -> OpenAlexConfigDTO:
-        pass
+        # load openalex config
 
     def load_grobid_config(self) -> GrobidConfigDTO:
         pass
 
 
-def _load_agent_config(key: str, config: Dict[str, Any], prompt_path: str) -> AgentConfigDTO:
+def _load_agent_config(key: str, config: Dict[str, Any]) -> AgentConfigDTO:
     """
     Load LLM agent details from config file
 
     :param key: Root of config
     :param config: Dict of the agent details
-    :param prompt_path: Path to prompt file to use
     :raises KeyError: If agent config is missing a required key
     :return: LLM Agent DTO
     """
@@ -123,7 +114,6 @@ def _load_agent_config(key: str, config: Dict[str, Any], prompt_path: str) -> Ag
     ollama_port = os.getenv(OLLAMA_PORT_ENV, config.get('ollama_port', ollama.DEFAULT_PORT))
     return AgentConfigDTO(config['model'],
                           config.get('tag', "latest"),
-                          prompt_path,
                           ollama_host,
                           ollama_port)
 
@@ -141,7 +131,7 @@ def _load_ranking_config(key: str, config: Dict[str, Any]) -> RankingConfigDTO:
     # load agent details
     if 'agent' not in config:
         raise KeyError(f"Missing required key '{key}.agent'")
-    agent_config = _load_agent_config(f'{key}.agent', config['agent'], config.get('prompt_path', RANK_CONTEXT_FILE))
+    agent_config = _load_agent_config(f'{key}.agent', config['agent'])
 
     # load additional ranking details
     if 'context_window' not in config:
@@ -152,3 +142,7 @@ def _load_ranking_config(key: str, config: Dict[str, Any]) -> RankingConfigDTO:
                             config['context_window'],
                             config.get('abstracts_per_comparison', MIN_ABSTRACT_PER_COMPARISON),
                             config.get('tokens_per_word', AVG_TOKEN_PER_WORD))
+
+
+def _load_openalex_config(key: str, config: Dict[str, Any]) -> OpenAlexConfigDTO:
+    pass

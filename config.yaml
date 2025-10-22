@@ -2,10 +2,6 @@
 query_generation:
   # LLM Options
   agent:
-    # Provide a custom context prompt file for generating a search query
-    # Default will be the 'nl_to_elasticsearch_query.prompt'
-    # prompt_path:
-
     # Host of an ollama server, will default to 'localhost'
     # Useful if ollama server is not running locally, ie running on a remote host with more resources available
     # Superseded by the OLLAMA_HOST env variable
@@ -29,10 +25,6 @@ query_generation:
 abstract_ranking:
   # LLM Options
   agent:
-    # Provide a custom context prompt file for ranking abstracts
-    # Default will be 'rank_abstract.prompt'
-    # prompt_path:
-
     # Host of an ollama server, will default to 'localhost'
     # Useful if ollama server is not running locally, ie running on a remote host with more resources available
     # Superseded by the OLLAMA_HOST env variable
