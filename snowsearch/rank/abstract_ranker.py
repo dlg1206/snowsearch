@@ -192,13 +192,23 @@ class AbstractRanker:
         :param top_n: Number of top papers to find
         :return: Ordered list of the most relevant to the prompt
         """
+        # guard against pointless prompting
+        match len(papers):
+            case 1:
+                logger.warn("Only one paper provided, skipping ranking")
+                return papers
+            case 0:
+                logger.error_msg("No papers provided, skipping ranking")
+                return papers
+
         # Convert to AbstractDTOs with token estimates
         abstracts = [
             AbstractDTO(p.id, p.abstract_text, self._estimate_tokens(p.abstract_text))
             for p in papers
         ]
-        # get top abstracts
-        top_abstracts = self._filter_abstracts(prompt, abstracts, top_n)
+        # filter papers if not enough to do final ranking
+        top_abstracts = self._filter_abstracts(prompt, abstracts, top_n) if len(abstracts) > top_n else abstracts
+
         logger.info(f"Performing final ranking")
         timer = Timer()
         ranked_abstracts = self._rank_abstracts(prompt, top_abstracts)
