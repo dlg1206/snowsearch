@@ -1,0 +1,105 @@
+# Options for generating Elastic search query for OpenAlex
+query_generation:
+  # LLM Options
+  agent:
+    # Provide a custom context prompt file for generating a search query
+    # Default will be the 'nl_to_elasticsearch_query.prompt'
+    # prompt_path:
+
+    # Host of an ollama server, will default to 'localhost'
+    # Useful if ollama server is not running locally, ie running on a remote host with more resources available
+    # Superseded by the OLLAMA_HOST env variable
+    # Ignored if the OPENAI_API_KEY env variable is set, in which case the OpenAI API is used
+    # ollama_host:
+
+    # Port of an ollama server, will default to '11434'
+    # Useful if ollama server is not running locally, ie running on a remote host with more resources available
+    # Superseded by the OLLAMA_PORT env variable
+    # Ignored if the OPENAI_API_KEY env variable is set, in which case the OpenAI API is used
+    # ollama_port:
+
+    # Model to use for parsing natural language paper search into findpapers syntax
+    # If using ollama (default), search for desired models here: https://ollama.com/search
+    # If using OpenAI, search for desired models here: https://platform.openai.com/docs/models
+    model: llama3
+
+    # If using ollama, specify a tag model to use, will default to 'latest'
+    tag: 8b
+
+abstract_ranking:
+  # LLM Options
+  agent:
+    # Provide a custom context prompt file for ranking abstracts
+    # Default will be 'rank_abstract.prompt'
+    # prompt_path:
+
+    # Host of an ollama server, will default to 'localhost'
+    # Useful if ollama server is not running locally, ie running on a remote host with more resources available
+    # Superseded by the OLLAMA_HOST env variable
+    # Ignored if the OPENAI_API_KEY env variable is set, in which case the OpenAI API is used
+    # ollama_host:
+
+    # Port of an ollama server, will default to '11434'
+    # Useful if ollama server is not running locally, ie running on a remote host with more resources available
+    # Superseded by the OLLAMA_PORT env variable
+    # Ignored if the OPENAI_API_KEY env variable is set, in which case the OpenAI API is used
+    # ollama_port:
+
+    # Model to use for parsing natural language paper search into findpapers syntax
+    # If using ollama (default), search for desired models here: https://ollama.com/search
+    # If using OpenAI, search for desired models here: https://platform.openai.com/docs/models
+    model: llama3
+
+    # If using ollama, specify a tag model to use, will default to 'latest'
+    tag: 8b
+
+  # Context window of selected model
+  context_window: 8000
+
+  # Number of abstracts per ranking, will default to 2
+  # If using a larger model, this can be increased to reduce the number of API calls made or kept low to keep a
+  # more detailed analysis of each abstract. For smaller models, keeping this number low keeps the abstracts
+  # within the smaller context window
+  # abstracts_per_comparison:
+
+  # Average tokens per word, will default to 1.2
+  # tokens_per_word:
+
+# Config for OpenAlex API
+# https://docs.openalex.org/
+openalex:
+  # Optional email to use for 'polite pool' for better access
+  # Queries are 10x faster if an email is provided
+  # https://docs.openalex.org/how-to-use-the-api/rate-limits-and-authentication#the-polite-pool
+  # email:
+
+# Config for grobid python client
+# https://github.com/kermitt2/grobid-client-python?tab=readme-ov-file#default-configuration
+grobid:
+  # Host and port of a grobid server, will default to 'localhost:8070'
+  # Useful if grobid server is not running locally, ie running on a remote host with more resources available
+  # Superseded by the GROBID_SERVER env variable
+  # grobid_server:
+
+  # Thread pool size.
+  # Tune carefully: a large batch size will result in the data being written less frequently
+  # Default is 1000
+  # batch_size:
+
+  # Wait time when server is busy (seconds)
+  # Default is 5
+  # sleep_time:
+
+  # Client-side timeout (seconds)
+  # Default is 180
+  # timeout:
+
+  # List of TEI XML elements for which GROBID should extract coordinates (bounding boxes), ie x y location in pdf.
+  # Defaults are
+  # - persName
+  # - figure
+  # - ref
+  # - biblStruct
+  # - formula
+  # - s
+  # coordinates:

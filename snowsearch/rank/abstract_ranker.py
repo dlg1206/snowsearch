@@ -27,8 +27,8 @@ class AbstractRanker:
     def __init__(self,
                  model_client: ModelClient,
                  context_window: int,
-                 abstracts_per_comparison: int = MIN_ABSTRACT_PER_COMPARISON,
-                 token_per_word: int = AVG_TOKEN_PER_WORD):
+                 abstracts_per_comparison: int,
+                 tokens_per_word: int):
         """
         Create new Abstract ranker
 
@@ -38,11 +38,11 @@ class AbstractRanker:
             If using a larger model, this can be increased to reduce the number of API calls made or kept low to keep a
             more detailed analysis of each abstract. For smaller models, keeping this number low keeps the abstracts
             within the smaller context window
-        :param token_per_word: Average tokens per word to use for window estimation
+        :param tokens_per_word: Average tokens per word to use for window estimation
         """
         self._model_client = model_client
         self._abstracts_per_comparison = abstracts_per_comparison
-        self._token_per_word = token_per_word
+        self._token_per_word = tokens_per_word
 
         # load content for one-shot
         with open(RANK_CONTEXT_FILE, 'r') as f:
