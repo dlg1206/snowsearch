@@ -58,7 +58,7 @@ class RankingConfigDTO:
 
 @dataclass
 class OpenAlexConfigDTO:
-    pass
+    email: str = None
 
 
 @dataclass
@@ -76,10 +76,8 @@ class Config:
         # load query generation config
         if 'query_generation' not in config:
             raise KeyError("Missing required key 'query_generation'")
-        if 'agent' not in config['query_generation']:
-            raise KeyError("Missing required key 'query_generation.agent'")
         self._query_generation_config = _load_agent_config('query_generation.agent',
-                                                           config['query_generation']['agent'])
+                                                           config['query_generation'].get('agent'))
 
         # load abstract ranking config
         if 'abstract_ranking' not in config:
@@ -87,6 +85,9 @@ class Config:
         self._ranking_config = _load_ranking_config('abstract_ranking', config['abstract_ranking'])
 
         # load openalex config
+        if 'openalex' not in config:
+            raise KeyError("Missing required key 'openalex'")
+        self._openalex_config = _load_openalex_config('openalex', config['openalex'])
 
     def load_grobid_config(self) -> GrobidConfigDTO:
         pass
@@ -101,6 +102,10 @@ def _load_agent_config(key: str, config: Dict[str, Any]) -> AgentConfigDTO:
     :raises KeyError: If agent config is missing a required key
     :return: LLM Agent DTO
     """
+    # ensure agent is present
+    if not config:
+        raise KeyError(f"Missing required key '{key}")
+
     # ensure required keys are present
     if "model" not in config:
         raise KeyError(f"Missing required key '{key}.model'")
@@ -129,9 +134,7 @@ def _load_ranking_config(key: str, config: Dict[str, Any]) -> RankingConfigDTO:
     """
 
     # load agent details
-    if 'agent' not in config:
-        raise KeyError(f"Missing required key '{key}.agent'")
-    agent_config = _load_agent_config(f'{key}.agent', config['agent'])
+    agent_config = _load_agent_config(f'{key}.agent', config.get('agent'))
 
     # load additional ranking details
     if 'context_window' not in config:
@@ -144,5 +147,11 @@ def _load_ranking_config(key: str, config: Dict[str, Any]) -> RankingConfigDTO:
                             config.get('tokens_per_word', AVG_TOKEN_PER_WORD))
 
 
-def _load_openalex_config(key: str, config: Dict[str, Any]) -> OpenAlexConfigDTO:
-    pass
+def _load_openalex_config(config: Dict[str, Any]) -> OpenAlexConfigDTO:
+    """
+    Load Open Alex details from config
+
+    :param config: Dict of the Open Alex details
+    :return: Open Alex DTO
+    """
+    return OpenAlexConfigDTO(config.get('email'))
