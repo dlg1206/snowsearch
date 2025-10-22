@@ -9,9 +9,13 @@ snowball:
   # REQUIRED
   rounds: 3
 
+  # For each round, the upper limit of the number of papers to snowball (fetch citation details for)
+  # Leave blank for no upper limit
+  papers_per_round: 3
+
   # For each paper in a round, the upper limit of the number of citations (new papers) to download and process
   # Leave blank for no upper limit
-  citations_per_paper: 10
+  citations_per_paper: 3
 
   # Minimum similarity score between the prompt and abstract, must be [-1,1], but 0.4 is recommended
   # Increasing will reduce the number of valid papers, potentially limiting the snowball pool
@@ -95,6 +99,11 @@ abstract_ranking:
   # Upper limit of abstracts that meet the minimum abstract threshold score
   # Default is 100
   # abstract_limit:
+
+  # Final top papers to present.
+  # All abstracts will need to fit inside context window for final ranking.
+  # REQUIRED
+  top_n_papers: 10
 
 # Config for OpenAlex API
 # https://docs.openalex.org/

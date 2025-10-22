@@ -39,6 +39,7 @@ class RankingConfigDTO:
     agent_config: AgentConfigDTO
     context_window: int
     min_abstract_score: float
+    top_n_papers: int
     abstract_limit: int = 100
     abstracts_per_comparison: int = None
     tokens_per_word: float = None
@@ -49,11 +50,11 @@ class RankingConfigDTO:
             raise ValueError("Context window must be greater than 0")
 
         # ensure abstract comparisons is positive
-        if self.abstracts_per_comparison < 2:
+        if self.abstracts_per_comparison and self.abstracts_per_comparison < 2:
             raise ValueError("Need at least 2 abstracts to compare")
 
         # ensure tokens per word is positive
-        if self.tokens_per_word <= 0:
+        if self.tokens_per_word and self.tokens_per_word <= 0:
             raise ValueError("A word must have a positive token count")
 
 
@@ -88,6 +89,7 @@ class SnowballConfigDTO:
     rounds: int
     min_abstract_score: float
     seed_paper_limit: int = None
+    papers_per_round: int = None
     citations_per_paper: int = None
 
     def __post_init__(self):
@@ -99,6 +101,9 @@ class SnowballConfigDTO:
 
         if self.seed_paper_limit and self.seed_paper_limit < 1:
             raise ValueError("Seed round needs at least 1 paper")
+
+        if self.papers_per_round and self.papers_per_round < 1:
+            raise ValueError("Each snowball round needs at least 1 paper")
 
         if self.citations_per_paper and self.citations_per_paper < 1:
             raise ValueError("Papers need at least 1 citation per paper")
@@ -172,6 +177,7 @@ def _load_snowball_config(key: str, config: Dict[str, Any]) -> SnowballConfigDTO
     return SnowballConfigDTO(config['rounds'],
                              config['min_abstract_score'],
                              config.get('seed_paper_limit'),
+                             config.get('papers_per_round'),
                              config.get('citations_per_paper'))
 
 
@@ -223,11 +229,14 @@ def _load_ranking_config(key: str, config: Dict[str, Any]) -> RankingConfigDTO:
         raise KeyError(f"Missing required key '{key}.context_window'")
     if not config.get('min_abstract_score'):
         raise KeyError(f"Missing required key '{key}.min_abstract_score'")
+    if not config.get('top_n_papers'):
+        raise KeyError(f"Missing required key '{key}.top_n_papers'")
 
     # return dto
     return RankingConfigDTO(agent_config,
                             config['context_window'],
                             config['min_abstract_score'],
+                            config['top_n_papers'],
                             config.get('abstracts_limit', 100),
                             config.get('abstracts_per_comparison', MIN_ABSTRACT_PER_COMPARISON),
                             config.get('tokens_per_word', AVG_TOKEN_PER_WORD))
