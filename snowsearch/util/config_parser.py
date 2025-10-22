@@ -99,13 +99,11 @@ class Config:
             raise KeyError("Missing required key 'abstract_ranking'")
         self._ranking = _load_ranking_config('abstract_ranking', config['abstract_ranking'])
 
-        # load openalex config
-        if 'openalex' in config:
-            self._openalex = _load_openalex_config(config['openalex'])
+        # load openalex config if data, else use default
+        self._openalex = _load_openalex_config(config['openalex']) if config.get('openalex') else OpenAlexConfigDTO()
 
-        # load grobid config
-        if 'grobid' in config:
-            self._grobid = _load_grobid_config(config['grobid'])
+        # load grobid config if data, else use default
+        self._grobid = _load_grobid_config(config['grobid']) if config.get('grobid') else GrobidConfigDTO()
 
     @property
     def query_generation(self) -> AgentConfigDTO:
