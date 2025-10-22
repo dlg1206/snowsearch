@@ -124,6 +124,7 @@ class AbstractRanker:
 
         # error if exceed retries
         for attempt in range(0, MAX_RETRIES):
+            logger.debug_msg(f"Ranking {len(abstracts)} abstracts ({attempt + 1}/{MAX_RETRIES})")
             completion, timer = self._model_client.prompt(
                 messages=[
                     {"role": "system", "content": context},
@@ -171,6 +172,7 @@ class AbstractRanker:
                 break
 
             logger.info(f"Round {round_num + 1}: {len(current_abstracts)} papers remain")
+            logger.debug_msg(f"Processing {len(bins)} matches, comparing {min(bins, key=len)} to {max(bins, key=len)} abstracts per round")
 
             # Step 2: Select one from each bin
             selected = []

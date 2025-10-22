@@ -134,12 +134,13 @@ class GrobidWorker:
 
         return GrobidDTO(title, doc.abstract, [CitationDTO(c.title, c.doi) for c in doc.citations])
 
-    async def process_papers(self, paper_db: PaperDatabase, papers: List[PaperDTO]):
+    async def process_papers(self, paper_db: PaperDatabase, papers: List[PaperDTO]) -> int:
         """
         Process a list of papers and save them to the database
 
         :param paper_db: Database to save paper details to
         :param papers: List of paper titles and their download urls
+        :return Number of papers successfully processed
         """
         num_success = 0
         citations = set()
@@ -208,7 +209,7 @@ class GrobidWorker:
         logger.info(f"Found {len(citations)} citations")
         logger.info(f"Failed to download {num_fail_download} papers ({percent(num_fail_download, len(papers))})")
         logger.info(f"Failed to process {num_fail_process} papers ({percent(num_fail_process, len(papers))})")
-
+        return num_success
 
 async def _retry_wrapper(callback: Callable[[], Coroutine[Any, Any, Any]],
                          retries: int = MAX_RETRIES,
