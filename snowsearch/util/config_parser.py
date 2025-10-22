@@ -6,6 +6,7 @@ import yaml
 
 from ai import ollama
 from openalex.config import NL_TO_QUERY_CONTEXT_FILE
+from rank.config import MIN_ABSTRACT_PER_COMPARISON, AVG_TOKEN_PER_WORD, RANK_CONTEXT_FILE
 
 """
 File: config_parser.py
@@ -25,10 +26,10 @@ OLLAMA_PORT_ENV = "OLLAMA_PORT"
 @dataclass
 class AgentConfigDTO:
     model: str
-    tag: str = None
+    tag: str = "latest"
     prompt_path: str = None
-    ollama_host: str = None
-    ollama_port: int = None
+    ollama_host: str = ollama.DEFAULT_HOST
+    ollama_port: int = ollama.DEFAULT_PORT
 
     def __post_init__(self):
         # ensure path exists
@@ -44,8 +45,8 @@ class AgentConfigDTO:
 class RankingConfigDTO:
     agent_config: AgentConfigDTO
     context_window: int
-    abstracts_per_comparison: int
-    tokens_per_word: int
+    abstracts_per_comparison: int = None
+    tokens_per_word: float = None
 
     def __post_init__(self) -> None:
         # ensure context is positive
@@ -74,19 +75,23 @@ class GrobidConfigDTO:
 class Config:
 
     def __init__(self, config_file: str = DEFAULT_CONFIG_PATH) -> None:
+        # load config file
         with open(config_file, 'r') as file:
             config = yaml.safe_load(file)
 
         # load query generation config
-        if "query_generation" not in config:
+        if 'query_generation' not in config:
             raise KeyError("Missing required key 'query_generation'")
-        if "agent" not in config['query_generation']:
+        if 'agent' not in config['query_generation']:
             raise KeyError("Missing required key 'query_generation.agent'")
         self._query_generation_config = _load_agent_config('query_generation.agent',
-                                                           config['query_generation']['agent'])
+                                                           config['query_generation']['agent'],
+                                                           config.get('prompt_path', NL_TO_QUERY_CONTEXT_FILE))
 
-    def _load_ranking_config(self) -> RankingConfigDTO:
-        pass
+        # load abstract ranking config
+        if 'abstract_ranking' not in config:
+            raise KeyError("Missing required key 'abstract_ranking'")
+        self._ranking_config = _load_ranking_config('abstract_ranking', config['abstract_ranking'])
 
     def load_openalex_config(self) -> OpenAlexConfigDTO:
         pass
@@ -95,12 +100,13 @@ class Config:
         pass
 
 
-def _load_agent_config(key: str, config: Dict[str, Any]) -> AgentConfigDTO:
+def _load_agent_config(key: str, config: Dict[str, Any], prompt_path: str) -> AgentConfigDTO:
     """
     Load LLM agent details from config file
 
     :param key: Root of config
     :param config: Dict of the agent details
+    :param prompt_path: Path to prompt file to use
     :raises KeyError: If agent config is missing a required key
     :return: LLM Agent DTO
     """
@@ -117,6 +123,32 @@ def _load_agent_config(key: str, config: Dict[str, Any]) -> AgentConfigDTO:
     ollama_port = os.getenv(OLLAMA_PORT_ENV, config.get('ollama_port', ollama.DEFAULT_PORT))
     return AgentConfigDTO(config['model'],
                           config.get('tag', "latest"),
-                          config.get('prompt_path', NL_TO_QUERY_CONTEXT_FILE),
+                          prompt_path,
                           ollama_host,
                           ollama_port)
+
+
+def _load_ranking_config(key: str, config: Dict[str, Any]) -> RankingConfigDTO:
+    """
+    Load abstract ranking details from config
+
+    :param key: Root of config
+    :param config: Dict of the ranking details
+    :raises KeyError: If ranking config is missing a required key
+    :return: Abstract Ranking DTO
+    """
+
+    # load agent details
+    if 'agent' not in config:
+        raise KeyError(f"Missing required key '{key}.agent'")
+    agent_config = _load_agent_config(f'{key}.agent', config['agent'], config.get('prompt_path', RANK_CONTEXT_FILE))
+
+    # load additional ranking details
+    if 'context_window' not in config:
+        raise KeyError(f"Missing required key '{key}.context_window'")
+
+    # return dto
+    return RankingConfigDTO(agent_config,
+                            config['context_window'],
+                            config.get('abstracts_per_comparison', MIN_ABSTRACT_PER_COMPARISON),
+                            config.get('tokens_per_word', AVG_TOKEN_PER_WORD))
