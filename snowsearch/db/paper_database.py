@@ -250,6 +250,39 @@ class PaperDatabase(Neo4jDatabase):
                         papers=[{'match_id': node.match_id, **node.required_properties, **node.properties}
                                 for node in paper_nodes])
 
+    def get_paper(self, title: str) -> PaperDTO | None:
+        """
+        Get a paper from the database
+        
+        :param title: Title of paper
+        :return: Paper if found, None otherwise
+        """
+        # build query
+        node = Node.create(NodeType.PAPER, {'id': title})
+        query = f"MATCH (p:{node.type.value}) WHERE p.match_id = $match_id RETURN p"
+
+        # exe query
+        with self._driver.session() as session:
+            record = session.run(query, match_id=node.match_id).single()
+            # not found
+            if not record:
+                return None
+            # convert to dto
+            p = record['p']
+            return PaperDTO(p.get('id'),
+                            openalex_id=p.get('openalex_id'),
+                            doi=p.get('doi'),
+                            abstract_text=p.get('abstract_text'),
+                            is_open_access=p.get('is_open_access'),
+                            pdf_url=p.get('pdf_url'),
+                            openalex_status=p.get('openalex_status'),
+                            download_status=p.get('download_status'),
+                            download_error_msg=p.get('download_error_msg'),
+                            grobid_status=p.get('grobid_status'),
+                            grobid_error_msg=p.get('grobid_error_msg'),
+                            time_grobid_processed=p.get('time_grobid_processed'),
+                            time_added=p.get('time_added'))
+
     def get_unprocessed_pdf_urls(self, run_id: int = None, paper_limit: int = None) -> List[PaperDTO]:
         """
         Get all papers with pdfs that haven't been processed by grobid yet
@@ -328,11 +361,11 @@ class PaperDatabase(Neo4jDatabase):
 
     def get_unprocessed_citations(self, source_title: str, top_k: int = None) -> List[CitationDTO]:
         """
-        Get the most referenced citations for a given paper
+        Get unprocessed citations for a given paper
 
         :param source_title: Title of paper that cites these papers
         :param top_k: Number of unprocessed citations to get, ranked total number of references (Default: All)
-        :return: List of citation title, doi, and current citation count
+        :return: List of unprocessed citations in order of most to least referenced
         """
         query = f"""
         MATCH (s:{NodeType.PAPER.value})-[:{RelationshipType.REFERENCES.value}]->(c:{NodeType.PAPER.value})
