@@ -5,7 +5,7 @@
 name: snowsearch
 services:
 
-  # Ollama api server for converting prompt to findpapers syntax and grading responses
+  # Ollama api server for converting prompt to OpenAlex Elasticsearch syntax and grading responses
   ollama:
     image: ollama/ollama:0.12.3
     container_name: ollama
