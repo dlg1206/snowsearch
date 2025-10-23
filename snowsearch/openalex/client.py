@@ -202,10 +202,13 @@ class OpenAlexClient:
             while True:
                 try:
                     # save results
+                    # todo when papers are null
                     next_cursor, papers = await self._fetch_page(session, oa_query, next_cursor)
                     ranked_papers = [(papers[i], i + rank_offset) for i in range(0, len(papers))]
                     rank_offset += len(papers)
-                    paper_db.insert_run_paper_batch(run_id, ranked_papers)
+                    if ranked_papers:
+                        paper_db.insert_run_paper_batch(run_id, ranked_papers)
+                    # break
                     # no pages left
                     if not next_cursor:
                         break
@@ -251,8 +254,9 @@ class OpenAlexClient:
                 num_doi += len(found_papers)
                 # save titles for second pass
                 titles += [doi_reverse_lookup.get(doi) for doi in missing_doi_ids]
-                # save rest
-                paper_db.insert_paper_batch(found_papers)
+                # save rest if any
+                if found_papers:
+                    paper_db.insert_paper_batch(found_papers)
 
             # pass 2 - fetch by title
             title_tasks = [_fetch_title_wrapper(semaphore, c, self._fetch_by_exact_title(session, c.id)) for c in
@@ -278,9 +282,9 @@ class OpenAlexClient:
         num_success = num_doi + num_title
         logger.info(
             f"Search complete, successfully updated {num_success} citations ({percent(num_success, len(citations))})")
-        logger.info(f"Found {num_doi} citations by DOI ({percent(num_doi, len(citations))})")
-        logger.info(f"Found {num_title} citations by title ({percent(num_title, len(citations))})")
-        logger.info(f"Failed to find {num_missing} citations ({percent(num_missing, len(citations))})")
+        logger.debug_msg(f"Found {num_doi} citations by DOI ({percent(num_doi, len(citations))})")
+        logger.debug_msg(f"Found {num_title} citations by title ({percent(num_title, len(citations))})")
+        logger.debug_msg(f"Failed to find {num_missing} citations ({percent(num_missing, len(citations))})")
 
     def generate_openalex_query(self, nl_query: str) -> str:
         """
@@ -295,7 +299,7 @@ class OpenAlexClient:
         """
         # error if exceed retries
         for attempt in range(0, MAX_RETRIES):
-            logger.info(f"Generating OpenAlex query ({attempt + 1}/{MAX_RETRIES})")
+            logger.info(f"Generating OpenAlex query ({attempt + 1}/{MAX_RETRIES}) | prompt: {prompt.strip()}")
             completion, timer = self._model_client.prompt(
                 messages=[
                     {"role": "system", "content": self._nl_to_query_context},
