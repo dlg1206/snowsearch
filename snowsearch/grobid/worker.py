@@ -3,14 +3,14 @@ import logging
 from asyncio import Semaphore
 from datetime import datetime
 from tempfile import NamedTemporaryFile, TemporaryDirectory
-from typing import List, Dict, Any, Callable, Coroutine
+from typing import List, Dict, Any
 
 import grobid_tei_xml
 from aiohttp import ClientSession, ClientResponseError
 from grobid_client.grobid_client import GrobidClient
 
 from db.paper_database import PaperDatabase
-from grobid.config import MAX_CONCURRENT_DOWNLOADS, MAX_PDF_COUNT, KILOBYTE, DOWNLOAD_HEADERS, MAX_RETRIES, PDF_MAGIC, \
+from grobid.config import MAX_CONCURRENT_DOWNLOADS, MAX_PDF_COUNT, KILOBYTE, DOWNLOAD_HEADERS, PDF_MAGIC, \
     MAX_GROBID_REQUESTS
 from grobid.dto import GrobidDTO, CitationDTO
 from grobid.exception import PaperDownloadError, GrobidProcessError, NoFileDataError, InvalidFileFormatError
@@ -26,7 +26,7 @@ Description: Grobid worker that handles downloading and processing open access p
 """
 
 # Mute grobid client logs
-logging.getLogger("grobid_client").setLevel(logging.CRITICAL + 1)  # todo doesn't work
+logging.getLogger("grobid_client").setLevel(logging.CRITICAL)  # todo doesn't work
 
 
 class GrobidWorker:
@@ -110,7 +110,7 @@ class GrobidWorker:
             # limit number of downloaded pdfs
             async with self._pdf_file_semaphore:
                 # attempt to download paper with retry logic
-                await _retry_wrapper(lambda: self._download_pdf(session, title, pdf_url, tmp_pdf.name), backoff=.1)
+                await self._download_pdf(session, title, pdf_url, tmp_pdf.name)
                 # block to prevent overwhelming grobid server
                 async with self._grobid_semaphore:
                     logger.debug_msg(f"Processing '{tmp_pdf.name}' | {title}")
@@ -134,7 +134,7 @@ class GrobidWorker:
 
         return GrobidDTO(title, doc.abstract, [CitationDTO(c.title, c.doi) for c in doc.citations])
 
-    async def process_papers(self, paper_db: PaperDatabase, papers: List[PaperDTO]) -> int:
+    async def enrich_papers(self, paper_db: PaperDatabase, papers: List[PaperDTO]) -> int:
         """
         Process a list of papers and save them to the database
 
@@ -206,29 +206,7 @@ class GrobidWorker:
         percent = lambda a, b: f"{(a / b) * 100:.01f}%"
         logger.info(
             f"Processing complete, successfully download and processed {num_success} papers ({percent(num_success, len(papers))})")
-        logger.info(f"Found {len(citations)} citations")
-        logger.info(f"Failed to download {num_fail_download} papers ({percent(num_fail_download, len(papers))})")
-        logger.info(f"Failed to process {num_fail_process} papers ({percent(num_fail_process, len(papers))})")
+        logger.debug_msg(f"Found {len(citations)} citations")
+        logger.debug_msg(f"Failed to download {num_fail_download} papers ({percent(num_fail_download, len(papers))})")
+        logger.debug_msg(f"Failed to process {num_fail_process} papers ({percent(num_fail_process, len(papers))})")
         return num_success
-
-async def _retry_wrapper(callback: Callable[[], Coroutine[Any, Any, Any]],
-                         retries: int = MAX_RETRIES,
-                         backoff: float = 0.0) -> Any:
-    """
-    Util method to wrap retry logic
-
-    :param callback: Async callback function to attempt
-    :param retries: Number to retries (Default: 3)
-    :param backoff: Delay time for exponential backoff (Default: 0 - ie no backoff)
-    :return: Return values of the callback function
-    """
-    last_exception = None
-    for attempt in range(0, retries + 1):
-        try:
-            return await callback()
-        except Exception as e:
-            last_exception = e
-            # exponential backoff
-            await asyncio.sleep(backoff * 2 ** attempt)
-    # exceed retries, raise exception
-    raise last_exception
