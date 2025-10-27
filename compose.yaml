@@ -32,6 +32,7 @@ services:
       - "7687:7687"  # Bolt protocol
     environment:
       NEO4J_AUTH: ${NEO4J_AUTH:?Neo4j 'user/pw' must be set in the .env file}
+      NEO4J_client_allow__telemetry: false
     networks:
       - snowsearch-net
     volumes:
