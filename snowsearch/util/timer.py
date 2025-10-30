@@ -1,3 +1,5 @@
+import time
+
 """
 File: timer.py
 
@@ -5,7 +7,6 @@ Description: Util timer for tracking duration
 
 @author Derek Garcia
 """
-import time
 
 
 class Timer:

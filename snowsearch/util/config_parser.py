@@ -8,7 +8,7 @@ from ai import ollama
 from ai.ollama import OLLAMA_HOST_ENV, OLLAMA_PORT_ENV
 from ai.openai import OPENAI_API_KEY_ENV
 from grobid.config import MAX_GROBID_REQUESTS, MAX_CONCURRENT_DOWNLOADS, MAX_PDF_COUNT, GROBID_SERVER_ENV
-from rank.config import MIN_ABSTRACT_PER_COMPARISON, AVG_TOKEN_PER_WORD
+from rank.config import AVG_TOKEN_PER_WORD
 
 """
 File: config_parser.py
@@ -40,18 +40,12 @@ class RankingConfigDTO:
     context_window: int
     min_abstract_score: float
     top_n_papers: int
-    abstract_limit: int = 100
-    abstracts_per_comparison: int = None
     tokens_per_word: float = None
 
     def __post_init__(self) -> None:
         # ensure context is positive
         if self.context_window <= 0:
             raise ValueError("Context window must be greater than 0")
-
-        # ensure abstract comparisons is positive
-        if self.abstracts_per_comparison and self.abstracts_per_comparison < 2:
-            raise ValueError("Need at least 2 abstracts to compare")
 
         # ensure tokens per word is positive
         if self.tokens_per_word and self.tokens_per_word <= 0:
@@ -237,8 +231,6 @@ def _load_ranking_config(key: str, config: Dict[str, Any]) -> RankingConfigDTO:
                             config['context_window'],
                             config['min_abstract_score'],
                             config['top_n_papers'],
-                            config.get('abstracts_limit', 100),
-                            config.get('abstracts_per_comparison', MIN_ABSTRACT_PER_COMPARISON),
                             config.get('tokens_per_word', AVG_TOKEN_PER_WORD))
 
 

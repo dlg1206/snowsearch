@@ -81,12 +81,6 @@ abstract_ranking:
   # REQUIRED
   context_window: 8000
 
-  # Number of abstracts per ranking, will default to 2
-  # If using a larger model, this can be increased to reduce the number of API calls made or kept low to keep a
-  # more detailed analysis of each abstract. For smaller models, keeping this number low keeps the abstracts
-  # within the smaller context window
-  # abstracts_per_comparison:
-
   # Average tokens per word, will default to 1.2
   # tokens_per_word:
 
@@ -96,12 +90,9 @@ abstract_ranking:
   # REQUIRED
   min_abstract_score: .6
 
-  # Upper limit of abstracts that meet the minimum abstract threshold score
-  # Default is 100
-  # abstract_limit:
-
-  # Final top papers to present.
+  # Number of papers to rank
   # All abstracts will need to fit inside context window for final ranking.
+  # For reference, 1 abstract ~= 250 - 500 tokens
   # REQUIRED
   top_n_papers: 10
 
