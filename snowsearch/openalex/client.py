@@ -267,7 +267,7 @@ class OpenAlexClient:
                     paper = await future
                     num_title += 1
                     paper_db.upsert_paper(paper)
-                    logger.debug_msg(f"Found '{paper.id}' by title")
+                    logger.debug_msg(f"Found '{paper.paper_title}' by title")
                 except MissingOpenAlexEntryError as e:
                     num_missing += 1
                     logger.error_exp(e)
@@ -286,7 +286,7 @@ class OpenAlexClient:
         logger.debug_msg(f"Found {num_title} citations by title ({percent(num_title, len(citations))})")
         logger.debug_msg(f"Failed to find {num_missing} citations ({percent(num_missing, len(citations))})")
 
-    def generate_openalex_query(self, nl_query: str) -> str:
+    async def generate_openalex_query(self, nl_query: str) -> str:
         """
         Use an LLM to convert a natural language search query
         to an OpenAlex style search query based on Elasticsearch query
@@ -300,7 +300,7 @@ class OpenAlexClient:
         # error if exceed retries
         for attempt in range(0, MAX_RETRIES):
             logger.info(f"Generating OpenAlex query ({attempt + 1}/{MAX_RETRIES}) | prompt: {prompt.strip()}")
-            completion, timer = self._model_client.prompt(
+            completion, timer = await self._model_client.prompt(
                 messages=[
                     {"role": "system", "content": self._nl_to_query_context},
                     {"role": "user", "content": f"\nNatural language prompt:\n{nl_query.strip()}"}

@@ -70,7 +70,7 @@ class AbstractRanker:
         # return context and prompt
         return self._rank_context.replace("{total_abstracts}", str(len(abstracts))), final_prompt
 
-    def _rank_with_llm(self, context: str, prompt: str, abstract_lookup: Dict[str, AbstractDTO]) -> List[
+    async def _rank_with_llm(self, context: str, prompt: str, abstract_lookup: Dict[str, AbstractDTO]) -> List[
         AbstractDTO]:
         """
         Submit prompt to an LLM to rank abstracts
@@ -89,7 +89,7 @@ class AbstractRanker:
         # error if exceed retries
         for attempt in range(0, MAX_RETRIES):
             logger.debug_msg(f"Ranking attempt {attempt + 1}/{MAX_RETRIES}")
-            completion, timer = self._model_client.prompt(
+            completion, timer = await self._model_client.prompt(
                 messages=[
                     {"role": "system", "content": context},
                     {"role": "user", "content": prompt}
@@ -112,7 +112,7 @@ class AbstractRanker:
         # error if exceed retries
         raise ExceedMaxRankingGenerationAttemptsError(self._model_client.model)
 
-    def rank_abstracts(self, nl_query: str, abstracts: List[AbstractDTO]) -> List[AbstractDTO]:
+    async def rank_abstracts(self, nl_query: str, abstracts: List[AbstractDTO]) -> List[AbstractDTO]:
         """
         Rank a list of abstracts using an LLM
 
@@ -134,7 +134,7 @@ class AbstractRanker:
         # rank abstracts
         logger.info(f"Ranking {len(abstracts)} abstracts")
         timer = Timer()
-        ranked_abstracts = self._rank_with_llm(context, prompt, abstract_lookup={a.id: a for a in abstracts})
+        ranked_abstracts = await self._rank_with_llm(context, prompt, abstract_lookup={a.id: a for a in abstracts})
         logger.info(f"Final ranking determined in {timer.format_time()}s")
         # return results
         return ranked_abstracts

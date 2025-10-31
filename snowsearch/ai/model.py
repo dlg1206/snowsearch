@@ -1,7 +1,8 @@
 from abc import ABC
 from typing import Any, Tuple
 
-from openai import OpenAI
+
+from openai import OpenAI, AsyncOpenAI
 from openai.types.chat import ChatCompletion
 
 from util.logger import logger
@@ -33,9 +34,9 @@ class ModelClient(ABC):
         if base_url:
             params['base_url'] = base_url
         # create client
-        self._model_client = OpenAI(**params)
+        self._model_client = AsyncOpenAI(**params)
 
-    def prompt(self, **prompt_kwargs: Any) -> Tuple[ChatCompletion, Timer]:
+    async def prompt(self, **prompt_kwargs: Any) -> Tuple[ChatCompletion, Timer]:
         """
         Prompt a model
 
@@ -44,7 +45,7 @@ class ModelClient(ABC):
         """
         logger.debug_msg(f"Prompting '{self._model}'")
         timer = Timer()
-        completion = self._model_client.chat.completions.create(model=self._model, **prompt_kwargs)
+        completion = await self._model_client.chat.completions.create(model=self._model, **prompt_kwargs)
         logger.debug_msg(f"Response from '{self._model}' generated in {timer.format_time()}s")
         return completion, timer
 
