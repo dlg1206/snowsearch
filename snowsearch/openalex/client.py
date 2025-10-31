@@ -5,6 +5,7 @@ from typing import List, Dict, Tuple, Any
 
 from aiohttp import ClientSession
 from yarl import URL
+from tqdm.std import tqdm as TQDM
 
 from ai.model import ModelClient
 from db.config import DOI_PREFIX
@@ -208,7 +209,6 @@ class OpenAlexClient:
                     rank_offset += len(papers)
                     if ranked_papers:
                         paper_db.insert_run_paper_batch(run_id, ranked_papers)
-                    # break
                     # no pages left
                     if not next_cursor:
                         break
@@ -217,8 +217,13 @@ class OpenAlexClient:
                     logger.error_exp(e)
                 finally:
                     # update progress
-                    if not isinstance(progress, int):
+                    if isinstance(progress, TQDM):
                         progress.update(MAX_PER_PAGE)
+
+        # close progress bar if using
+        if isinstance(progress, TQDM):
+            progress.close()
+
 
     async def fetch_and_save_citation_metadata(self,
                                                paper_db: PaperDatabase,

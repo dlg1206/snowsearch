@@ -109,7 +109,7 @@ class PaperDatabase(Neo4jDatabase):
         self.insert_node(run_node)
         return new_run_id
 
-    def insert_openalex_query(self, run_id: int, model: str, nl_query: str, oa_query: str) -> None:
+    def insert_openalex_query(self, run_id: int, model: str | None, nl_query: str | None, oa_query: str) -> None:
         """
         Update a run with the openalex prompt and resulting query
 
@@ -342,6 +342,7 @@ class PaperDatabase(Neo4jDatabase):
                                   nl_query: str,
                                   unprocessed: bool = False,
                                   only_open_access: bool = False,
+                                  require_abstract: bool = False,
                                   paper_limit: int = 100,
                                   min_score: float = None) -> List[Tuple[str, float, float]]:
         """
@@ -351,6 +352,7 @@ class PaperDatabase(Neo4jDatabase):
         :param nl_query: Natural language to match papers to
         :param unprocessed: Only get papers that haven't been downloaded or processed with Grobid (Default: False)
         :param only_open_access: Only get papers that have an 'open access' label
+        :param require_abstract: Require that paper has an abstract
         :param paper_limit: Limit the max number of papers to return (Default: 100)
         :param min_score: Minimum similarity score of prompt to abstract, must be [-1,1] (Default: None but 0.4 recommended)
         :raises ValueError: If provided min_score is outside [-1,1] range
@@ -371,6 +373,8 @@ class PaperDatabase(Neo4jDatabase):
                 "node.pdf_url IS NOT NULL AND node.download_status IS NULL AND node.grobid_status IS NULL")
         if only_open_access:
             conditions.append("node.is_open_access")
+        if require_abstract:
+            conditions.append("node.abstract_embedding")
         where_clause = ""
         if conditions:
             where_clause = "WHERE " + " AND ".join(conditions)

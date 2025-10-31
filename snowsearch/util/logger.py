@@ -51,7 +51,7 @@ class Level(Enum):
         return f"{self._color}{self.name}{CLEAR}"
 
 
-DEFAULT_LOG_LEVEL = Level.ERROR
+DEFAULT_LOG_LEVEL = Level.INFO
 
 
 def _get_caller_module_name(caller_frame_distance: int = CALLER_FRAME_DISTANCE) -> str | None:

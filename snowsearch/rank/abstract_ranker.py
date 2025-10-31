@@ -1,3 +1,5 @@
+import asyncio
+import contextlib
 import json
 import math
 from json import JSONDecodeError
@@ -64,7 +66,7 @@ class AbstractRanker:
         # built prompt
         final_prompt = "\n"
         for a in abstracts:
-            final_prompt += f"id: {a.id}\nAbstract:\n{a.text}\n\n"
+            final_prompt += f"id: {a.id}\nAbstract:\n{a.content}\n\n"
         final_prompt += f"Search:\n{nl_query.strip()}"
 
         # return context and prompt
@@ -132,9 +134,34 @@ class AbstractRanker:
         # format prompt
         context, prompt = self._format_context_and_prompt(nl_query, abstracts)
         # rank abstracts
-        logger.info(f"Ranking {len(abstracts)} abstracts")
+        logger.info(f"Ranking {len(abstracts)} abstracts, this may take a while")
         timer = Timer()
-        ranked_abstracts = await self._rank_with_llm(context, prompt, abstract_lookup={a.id: a for a in abstracts})
+
+        async def __heartbeat():
+            """
+            Heartbeat for long running llm ranking
+            """
+            try:
+                while True:
+                    await asyncio.sleep(5)
+                    logger.info(f"{timer.format_time()} seconds elapsed")
+            except asyncio.CancelledError:
+                pass
+
+        hb = asyncio.create_task(__heartbeat())
+        try:
+            ranked_abstracts = await self._rank_with_llm(
+                context,
+                prompt,
+                abstract_lookup={a.id: a for a in abstracts},
+            )
+        finally:
+            # Always stop timer and cancel heartbeat even on exceptions
+            timer.stop()
+            hb.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await hb
+
         logger.info(f"Final ranking determined in {timer.format_time()}s")
         # return results
         return ranked_abstracts

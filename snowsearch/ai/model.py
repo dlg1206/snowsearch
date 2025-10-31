@@ -1,8 +1,7 @@
 from abc import ABC
 from typing import Any, Tuple
 
-
-from openai import OpenAI, AsyncOpenAI
+from openai import AsyncOpenAI
 from openai.types.chat import ChatCompletion
 
 from util.logger import logger
