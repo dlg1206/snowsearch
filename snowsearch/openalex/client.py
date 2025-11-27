@@ -192,6 +192,7 @@ class OpenAlexClient:
         :param paper_db: Database to save papers to
         :param oa_query: OpenAlex query string to use
         """
+        oa_query = oa_query.replace("'", '"')
         async with ClientSession() as session:
             hits = await self._fetch_paper_count(session, oa_query)
             logger.debug_msg(f"Found {hits} papers in OpenAlex")
@@ -297,9 +298,10 @@ class OpenAlexClient:
         :raises ExceedMaxQueryGenerationAttemptsError: If fail to extract query from model reply
         :return: OpenAlex query string
         """
+        nl_query = nl_query.replace("'", '"')
         # error if exceed retries
         for attempt in range(0, MAX_RETRIES):
-            logger.info(f"Generating OpenAlex query ({attempt + 1}/{MAX_RETRIES}) | prompt: {prompt.strip()}")
+            logger.info(f"Generating OpenAlex query ({attempt + 1}/{MAX_RETRIES}) | prompt: {nl_query.strip()}")
             completion, timer = await self._model_client.prompt(
                 messages=[
                     {"role": "system", "content": self._nl_to_query_context},
