@@ -366,47 +366,74 @@ class PaperDatabase(Neo4jDatabase):
             results = session.run(query, run_id=run_id) if run_id else session.run(query)
             return [PaperDTO(r['id'], pdf_url=r['pdf_url']) for r in results]
 
-    def search_by_prompt_papers(self,
-                                prompt: str,
-                                paper_limit: int = 100,
-                                min_score: float = None,
-                                include_abstract: bool = False) -> List[
-        Tuple[PaperDTO, float]]:
+    def search_papers_by_nl_query(self,
+                                  nl_query: str,
+                                  unprocessed: bool = False,
+                                  only_open_access: bool = False,
+                                  paper_limit: int = 100,
+                                  min_score: float = None) -> List[Tuple[str, float, float]]:
         """
-        Get papers with abstracts that best match the prompt
+        Get papers that best match the provided query, ranked in order of best title match then abstract
         The similarity score can range from 1 (exact match) and -1 (complete opposite match)
 
-        :param prompt: Search prompt
+        :param nl_query: Natural language to match papers to
+        :param unprocessed: Only get papers that haven't been downloaded or processed with Grobid (Default: False)
+        :param only_open_access: Only get papers that have an 'open access' label
         :param paper_limit: Limit the max number of papers to return (Default: 100)
         :param min_score: Minimum similarity score of prompt to abstract, must be [-1,1] (Default: None but 0.4 recommended)
-        :param include_abstract: Include the abstract text with the dto (Default: False)
         :raises ValueError: If provided min_score is outside [-1,1] range
-        :return: List of top_k paper titles that best match the given prompt and their score
+        :return: List of top_k papers ids ranked in order of best title match then abstract if available
         """
         # validate min score
         if min_score and (min_score > 1 or min_score < -1):
             raise ValueError("Param 'min_score' must be between -1 and 1")
 
-        prompt_embedding = self._embedding_model.encode(prompt, show_progress_bar=False).tolist()
+        nl_query_embedding = self._embedding_model.encode(nl_query, show_progress_bar=False).tolist()
+
+        # build where clause
+        conditions = []
+        if min_score is not None:
+            conditions.append("titleScore >= $minScore AND (abstractScore IS NULL OR abstractScore >= $minScore)")
+        if unprocessed:
+            conditions.append(
+                "node.pdf_url IS NOT NULL AND node.download_status IS NULL AND node.grobid_status IS NULL")
+        if only_open_access:
+            conditions.append("node.is_open_access")
+        where_clause = ""
+        if conditions:
+            where_clause = "WHERE " + " AND ".join(conditions)
+
         query = f"""
         CALL db.index.vector.queryNodes(
+          'paper_title_index',
+          $topK,
+          $embedding
+        ) YIELD node AS tnode, score AS titleScore
+
+        OPTIONAL CALL db.index.vector.queryNodes(
           'paper_abstract_index',
           $topK,
           $embedding
-        ) YIELD node, score
-        WHERE node.grobid_status = 200 {'AND score > $minScore' if min_score else ''}
-        RETURN node.id AS id, node.abstract_text AS abst, score AS score
-        ORDER BY score DESC
+        ) YIELD node AS anode, score AS abstractScore
+        WHERE anode.id = tnode.id
+
+        WITH
+          tnode AS node,
+          titleScore,
+          abstractScore
+        {where_clause}
+        RETURN
+          node.id      AS id,
+          titleScore,
+          abstractScore
+        ORDER BY titleScore DESC, abstractScore DESC
         """
         # set params
-        params: Dict[str, Any] = {'topK': paper_limit, 'embedding': prompt_embedding}
-        if min_score:
-            params['minScore'] = min_score
+        params: Dict[str, Any] = {'topK': paper_limit, 'embedding': nl_query_embedding, 'minScore': min_score}
         # exe query
         with self._driver.session() as session:
             results = session.run(query, **params)
-            return [(PaperDTO(r['id'], abstract_text=r['abst'] if include_abstract else None), r['score'])
-                    for r in results]
+            return [(r.get('id'), r.get('titleScore'), r.get('abstractScore')) for r in results]
 
     def get_unprocessed_citations(self, source_title: str, top_k: int = None) -> List[CitationDTO]:
         """
