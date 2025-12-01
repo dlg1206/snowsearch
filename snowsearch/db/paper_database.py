@@ -317,54 +317,27 @@ class PaperDatabase(Neo4jDatabase):
             if not record:
                 return None
             # convert to dto
-            p = record['p']
-            return PaperDTO(p.get('id'),
-                            openalex_id=p.get('openalex_id'),
-                            doi=p.get('doi'),
-                            abstract_text=p.get('abstract_text'),
-                            is_open_access=p.get('is_open_access'),
-                            pdf_url=p.get('pdf_url'),
-                            openalex_status=p.get('openalex_status'),
-                            download_status=p.get('download_status'),
-                            download_error_msg=p.get('download_error_msg'),
-                            grobid_status=p.get('grobid_status'),
-                            grobid_error_msg=p.get('grobid_error_msg'),
-                            time_grobid_processed=p.get('time_grobid_processed'),
-                            time_added=p.get('time_added'))
+            return PaperDTO.create_dto(record['p'])
 
-    def get_unprocessed_pdf_urls(self, run_id: int = None, paper_limit: int = None) -> List[PaperDTO]:
+    def get_papers(self, titles: List[str]) -> List[PaperDTO]:
         """
-        Get all papers with pdfs that haven't been processed by grobid yet
-        If the run_id is provided, the list of papers are returned in order to most to least
-        relevant determined by original openalex query
+        Get papers from the database
 
-        :param run_id: Optional run the paper was discovered in (Default: None)
-        :param paper_limit: Limit the max number of papers to return (Default: None)
-        :return: List of paper titles and pdf urls
+        :param titles: List of paper title to fetch from the database
+        :return: List of PaperDTOs
         """
-        # base query
+        # build query
+        match_ids = [Node.create(NodeType.PAPER, {'id': t}).match_id for t in titles]
         query = f"""
-            WHERE p.pdf_url IS NOT NULL 
-            AND p.download_status IS NULL 
-            AND p.grobid_status IS NULL 
-            AND p.is_open_access 
-            RETURN p.id AS id, p.pdf_url AS pdf_url
-            """
-
-        # order by run rank if provided
-        prefix = f"MATCH (run:{NodeType.RUN.value} {{id: $run_id}})-[r:{RelationshipType.ADDED.value}]->(p:{NodeType.PAPER.value})" if run_id else f"MATCH (p:{NodeType.PAPER.value})"
-        query = f"{prefix} {query}"
-        if run_id:
-            query = f"{query} ORDER BY r.rank"
-
-        # add limit if provided
-        if paper_limit:
-            query = f"{query} LIMIT {paper_limit}"
-
+        UNWIND $match_ids AS id
+        MATCH (p:{NodeType.PAPER.value} {{match_id: id}})
+        RETURN p
+        """
         # exe query
         with self._driver.session() as session:
-            results = session.run(query, run_id=run_id) if run_id else session.run(query)
-            return [PaperDTO(r['id'], pdf_url=r['pdf_url']) for r in results]
+            papers = [r['p'] for r in list(session.run(query, match_ids=match_ids))]
+            # convert to dtos
+            return [PaperDTO.create_dto(p) for p in papers]
 
     def search_papers_by_nl_query(self,
                                   nl_query: str,

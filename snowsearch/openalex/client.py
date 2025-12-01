@@ -109,7 +109,7 @@ class OpenAlexClient:
         # parse findings
         return result['meta']['next_cursor'], [
             PaperDTO(p['title'],
-                     openalex_id=p['id'],
+                     openalex_url=p['id'],
                      doi=p['doi'],
                      is_open_access=bool(p['open_access']['is_oa']),
                      pdf_url=p['open_access']['oa_url'])
@@ -145,7 +145,7 @@ class OpenAlexClient:
         papers = []
         for p in results.get('results', []):
             paper = PaperDTO(p['title'],
-                             openalex_id=p['id'],
+                             openalex_url=p['id'],
                              doi=p['doi'],
                              is_open_access=bool(p['open_access']['is_oa']),
                              pdf_url=p['open_access']['oa_url'])
@@ -179,7 +179,7 @@ class OpenAlexClient:
         if paper['title'].lower() != title.lower():
             return None
         return PaperDTO(paper['title'],
-                        openalex_id=paper['id'],
+                        openalex_url=paper['id'],
                         doi=paper['doi'],
                         is_open_access=bool(paper['open_access']['is_oa']),
                         pdf_url=paper['open_access']['oa_url'])
