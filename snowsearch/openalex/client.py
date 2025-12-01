@@ -220,12 +220,16 @@ class OpenAlexClient:
                     if not isinstance(progress, int):
                         progress.update(MAX_PER_PAGE)
 
-    async def fetch_and_save_citation_metadata(self, paper_db: PaperDatabase, citations: List[PaperDTO]) -> None:
+    async def fetch_and_save_citation_metadata(self,
+                                               paper_db: PaperDatabase,
+                                               citations: List[PaperDTO],
+                                               skip_title_search: bool = False) -> None:
         """
         Fetch details for the given list of citations and save to database
 
         :param paper_db: Database to save papers to
         :param citations: List of citations to fetch details for
+        :param skip_title_search: Optional skip title search (Default: False)
         """
         semaphore = Semaphore()  # semaphore so only 1 request at a time to prevent tripping rate limit
         num_doi = 0
@@ -258,22 +262,23 @@ class OpenAlexClient:
                     paper_db.insert_paper_batch(found_papers)
 
             # pass 2 - fetch by title
-            title_tasks = [_fetch_title_wrapper(semaphore, c, self._fetch_by_exact_title(session, c.id)) for c in
-                           titles]
-            for future in logger.get_data_queue(title_tasks, "Fetching citation details by title", "citation",
-                                                is_async=True):
-                try:
-                    paper = await future
-                    num_title += 1
-                    paper_db.upsert_paper(paper)
-                    logger.debug_msg(f"Found '{paper.id}' by title")
-                except MissingOpenAlexEntryError as e:
-                    num_missing += 1
-                    logger.error_exp(e)
-                    paper_db.upsert_paper(PaperDTO(e.title, openalex_status=404))
-                except Exception as e:
-                    num_missing += 1
-                    logger.error_exp(e)
+            if not skip_title_search:
+                title_tasks = [_fetch_title_wrapper(semaphore, c, self._fetch_by_exact_title(session, c.id)) for c in
+                               titles]
+                for future in logger.get_data_queue(title_tasks, "Fetching citation details by title", "citation",
+                                                    is_async=True):
+                    try:
+                        paper = await future
+                        num_title += 1
+                        paper_db.upsert_paper(paper)
+                        logger.debug_msg(f"Found '{paper.id}' by title")
+                    except MissingOpenAlexEntryError as e:
+                        num_missing += 1
+                        logger.error_exp(e)
+                        paper_db.upsert_paper(PaperDTO(e.title, openalex_status=404))
+                    except Exception as e:
+                        num_missing += 1
+                        logger.error_exp(e)
 
         # report results
         if len(citations):
