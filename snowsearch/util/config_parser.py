@@ -81,7 +81,7 @@ class GrobidConfigDTO:
 @dataclass
 class SnowballConfigDTO:
     rounds: int
-    min_abstract_score: float
+    min_similarity_score: float
     seed_paper_limit: int = None
     papers_per_round: int = None
 
@@ -89,8 +89,8 @@ class SnowballConfigDTO:
         if self.rounds < 0:
             raise ValueError("Snowball rounds cannot be negative")
 
-        if self.min_abstract_score < -1 or self.min_abstract_score > 1:
-            raise ValueError("Min abstract score must between -1 and 1")
+        if self.min_similarity_score < -1 or self.min_similarity_score > 1:
+            raise ValueError("Min similarity score must between -1 and 1")
 
         if self.seed_paper_limit and self.seed_paper_limit < 1:
             raise ValueError("Seed round needs at least 1 paper")
@@ -160,15 +160,14 @@ def _load_snowball_config(key: str, config: Dict[str, Any]) -> SnowballConfigDTO
     # ensure required keys are present
     if not config.get('rounds'):
         raise KeyError(f"Missing required key '{key}.rounds'")
-    if not config.get('min_abstract_score'):
-        raise KeyError(f"Missing required key '{key}.min_abstract_score'")
+    if not config.get('min_similarity_score'):
+        raise KeyError(f"Missing required key '{key}.min_similarity_score'")
 
     # return dto
     return SnowballConfigDTO(config['rounds'],
-                             config['min_abstract_score'],
+                             config['min_similarity_score'],
                              config.get('seed_paper_limit'),
-                             config.get('papers_per_round'),
-                             config.get('citations_per_paper'))
+                             config.get('papers_per_round'))
 
 
 def _load_agent_config(key: str, config: Dict[str, Any]) -> AgentConfigDTO:

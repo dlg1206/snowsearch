@@ -13,13 +13,14 @@ snowball:
   # Leave blank for no upper limit
   papers_per_round: 3
 
-  # Minimum similarity score between the prompt and abstract, must be [-1,1], but 0.4 is recommended
-  # Increasing will reduce the number of valid papers, potentially limiting the snowball pool
+  # Minimum similarity score between the natural language query and title / abstract.
+  # Must be [-1,1], but 0.4 is recommended.
+  # Increasing will reduce the number of valid papers, potentially limiting the snowball pool.
   # Decreasing will increase the number of valid papers, potentially adding a lot of noise to the pool
   # It is recommended to keep this value somewhat low to cast a wide net, after which the score can be
   # increased when ranking papers
   # REQUIRED
-  min_abstract_score: .4
+  min_similarity_score: .4
 
 # Options for generating Elastic search query for OpenAlex
 # REQUIRED
@@ -47,7 +48,7 @@ query_generation:
     # If using ollama, specify a tag model to use, will default to 'latest'
     tag: 8b
 
-# Options for ranking abstracts
+# Options for ranking papers
 # REQUIRED
 abstract_ranking:
   # LLM Options
