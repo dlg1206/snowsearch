@@ -13,10 +13,6 @@ snowball:
   # Leave blank for no upper limit
   papers_per_round: 3
 
-  # For each paper in a round, the upper limit of the number of citations (new papers) to download and process
-  # Leave blank for no upper limit
-  citations_per_paper: 3
-
   # Minimum similarity score between the prompt and abstract, must be [-1,1], but 0.4 is recommended
   # Increasing will reduce the number of valid papers, potentially limiting the snowball pool
   # Decreasing will increase the number of valid papers, potentially adding a lot of noise to the pool

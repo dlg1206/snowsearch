@@ -84,7 +84,6 @@ class SnowballConfigDTO:
     min_abstract_score: float
     seed_paper_limit: int = None
     papers_per_round: int = None
-    citations_per_paper: int = None
 
     def __post_init__(self):
         if self.rounds < 0:
@@ -98,9 +97,6 @@ class SnowballConfigDTO:
 
         if self.papers_per_round and self.papers_per_round < 1:
             raise ValueError("Each snowball round needs at least 1 paper")
-
-        if self.citations_per_paper and self.citations_per_paper < 1:
-            raise ValueError("Papers need at least 1 citation per paper")
 
 
 class Config:
