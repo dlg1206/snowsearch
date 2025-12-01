@@ -400,40 +400,35 @@ class PaperDatabase(Neo4jDatabase):
           titleScore,
           abstractScore
         ORDER BY titleScore DESC, abstractScore DESC
+        LIMIT $paper_limit
         """
         # set params
-        params: Dict[str, Any] = {'topK': paper_limit, 'embedding': nl_query_embedding, 'minScore': min_score}
+        # topK large to ensure capture enough data to filter and limit
+        params: Dict[str, Any] = {'topK': 100 * paper_limit, 'embedding': nl_query_embedding, 'minScore': min_score,
+                                  'paper_limit': paper_limit}
         # exe query
         with self._driver.session() as session:
             results = session.run(query, **params)
             return [(r.get('id'), r.get('titleScore'), r.get('abstractScore')) for r in results]
 
-    def get_unprocessed_citations(self, source_title: str, top_k: int = None) -> List[CitationDTO]:
+    def get_citations(self, source_title: str, unprocessed: bool = False) -> List[CitationDTO]:
         """
-        Get unprocessed citations for a given paper
+        Get citations for a given paper
 
-        :param source_title: Title of paper that cites these papers
-        :param top_k: Number of unprocessed citations to get, ranked total number of references (Default: All)
+        :param source_title: Title of paper to get citations for
+        :param unprocessed: Only get unprocessed citations (Default: False)
         :return: List of unprocessed citations in order of most to least referenced
         """
         query = f"""
         MATCH (s:{NodeType.PAPER.value})-[:{RelationshipType.REFERENCES.value}]->(c:{NodeType.PAPER.value})
         WHERE s.id = $source_title
-        WITH c
-        MATCH (any_paper:{NodeType.PAPER.value})-[:{RelationshipType.REFERENCES.value}]->(c)
-        WHERE c.download_status IS NULL AND c.openalex_status IS NULL
-        RETURN c.id AS id, c.doi AS doi, count(any_paper) AS citations
-        ORDER BY citations DESC
-        {'LIMIT $topK' if top_k else ''}
+        {'AND c.download_status IS NULL AND c.openalex_status IS NULL' if unprocessed else ''}
+        RETURN c.id AS id, c.doi AS doi
         """
-        # set params
-        params: Dict[str, Any] = {'source_title': source_title}
-        if top_k:
-            params['topK'] = top_k
         # exe query
         with self._driver.session() as session:
-            results = session.run(query, **params)
-            return [CitationDTO(r['id'], r['doi'], r['citations']) for r in results]
+            results = session.run(query, source_title=source_title)
+            return [CitationDTO(r.get('id'), r.get('doi')) for r in results]
 
 
 def _is_model_local(embedding_model: str) -> bool:

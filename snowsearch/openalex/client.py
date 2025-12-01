@@ -184,7 +184,7 @@ class OpenAlexClient:
                         is_open_access=bool(paper['open_access']['is_oa']),
                         pdf_url=paper['open_access']['oa_url'])
 
-    async def fetch_and_save_openalex_metadata(self, run_id: int, paper_db: PaperDatabase, oa_query: str) -> None:
+    async def search_and_save_metadata(self, run_id: int, paper_db: PaperDatabase, oa_query: str) -> None:
         """
         Fetch paper metadata from OpenAlex based on a query and save to database
 
@@ -221,7 +221,7 @@ class OpenAlexClient:
                     if not isinstance(progress, int):
                         progress.update(MAX_PER_PAGE)
 
-    async def save_citation_papers(self, paper_db: PaperDatabase, citations: List[CitationDTO]) -> None:
+    async def fetch_and_save_citation_metadata(self, paper_db: PaperDatabase, citations: List[CitationDTO]) -> None:
         """
         Fetch details for the given list of citations and save to database
 
@@ -249,8 +249,7 @@ class OpenAlexClient:
             # pass 1 - fetch by DOI
             doi_tasks = [_fetch_doi_batch_wrapper(semaphore, self._batch_fetch_by_doi(session, chunk))
                          for chunk in doi_chunks]
-            for future in logger.get_data_queue(doi_tasks, "Fetching citation details by doi", "batch",
-                                                is_async=True):
+            for future in logger.get_data_queue(doi_tasks, "Fetching citation details by doi", "batch", is_async=True):
                 found_papers, missing_doi_ids = await future
                 num_doi += len(found_papers)
                 # save titles for second pass
@@ -268,7 +267,7 @@ class OpenAlexClient:
                     paper = await future
                     num_title += 1
                     paper_db.upsert_paper(paper)
-                    logger.debug_msg(f"Found '{paper.paper_title}' by title")
+                    logger.debug_msg(f"Found '{paper.id}' by title")
                 except MissingOpenAlexEntryError as e:
                     num_missing += 1
                     logger.error_exp(e)
