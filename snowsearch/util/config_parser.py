@@ -54,7 +54,7 @@ class RankingConfigDTO:
 
 @dataclass
 class OpenAlexConfigDTO:
-    email: str = None
+    email: str | None = None
 
 
 @dataclass

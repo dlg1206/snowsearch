@@ -184,9 +184,9 @@ class OpenAlexClient:
                         is_open_access=bool(paper['open_access']['is_oa']),
                         pdf_url=paper['open_access']['oa_url'])
 
-    async def save_seed_papers(self, run_id: int, paper_db: PaperDatabase, oa_query: str) -> None:
+    async def fetch_and_save_openalex_metadata(self, run_id: int, paper_db: PaperDatabase, oa_query: str) -> None:
         """
-        Fetch papers from OpenAlex based on a query and save to database
+        Fetch paper metadata from OpenAlex based on a query and save to database
 
         :param run_id: ID of current run
         :param paper_db: Database to save papers to
@@ -276,7 +276,6 @@ class OpenAlexClient:
                 except Exception as e:
                     num_missing += 1
                     logger.error_exp(e)
-
 
         # report results
         percent = lambda a, b: f"{(a / b) * 100:.01f}%"

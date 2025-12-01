@@ -61,27 +61,36 @@ class PaperDatabase(Neo4jDatabase):
         """
         Create additional embedding index on init
         """
-        init_query = "MATCH (n:DB_Metadata) RETURN n.initialized LIMIT 1"
-        with self._driver.session() as session:
-            # skip if already initialized
-            if session.run(init_query).single():
-                logger.debug_msg("Database already initialized, skipping. . .")
-                return
         # regular init
         super().init()
-        # create embedding index
-        index_query = f'''
-        CREATE VECTOR INDEX paper_abstract_index
-        FOR (p:{NodeType.PAPER.value}) ON (p.abstract_embedding)
-        OPTIONS {{
-          indexConfig: {{
-            `vector.dimensions`: {self._model_dimensions},
-            `vector.similarity_function`: 'cosine'
-          }}
-        }}
-        '''
+        # create embedding index for title and abstract
+        queries = [
+            f"""
+            CREATE VECTOR INDEX paper_title_index IF NOT EXISTS
+            FOR (p:{NodeType.PAPER.value}) ON (p.title_embedding)
+            OPTIONS {{
+              indexConfig: {{
+                `vector.dimensions`: {self._model_dimensions},
+                `vector.similarity_function`: 'cosine'
+              }}
+            }}
+            """,
+
+            f"""
+            CREATE VECTOR INDEX paper_abstract_index IF NOT EXISTS
+            FOR (p:{NodeType.PAPER.value}) ON (p.abstract_embedding)
+            OPTIONS {{
+              indexConfig: {{
+                `vector.dimensions`: {self._model_dimensions},
+                `vector.similarity_function`: 'cosine'
+              }}
+            }}
+            """
+        ]
         with self._driver.session() as session:
-            session.run(index_query)
+            for q in queries:
+                session.run(q)
+
         # record as initialized
         self.insert_node(Node.create(NodeType.DB_METADATA, {'initialized': datetime.now()}))
 
@@ -140,6 +149,11 @@ class PaperDatabase(Neo4jDatabase):
             abstract_embedding = self._embedding_model.encode(paper.abstract_text, show_progress_bar=False).tolist()
             properties['abstract_embedding'] = abstract_embedding
 
+        # calculate embedding if title available
+        if paper.id:
+            abstract_embedding = self._embedding_model.encode(paper.id, show_progress_bar=False).tolist()
+            properties['title_embedding'] = abstract_embedding
+
         # insert node
         paper_node = Node.create(NodeType.PAPER, properties)
         is_new_node = self.insert_node(paper_node, True)  # update matches, don't replace existing fields
@@ -153,13 +167,11 @@ class PaperDatabase(Neo4jDatabase):
 
     def insert_run_paper_batch(self, run_id: int, hits: List[Tuple[PaperDTO, int]]) -> None:
         """
-        Insert a batch of papers found by an OpenAlex run
+        Insert a batch of papers found by an OpenAlex run and generate title embeddings for new papers
 
         :param run_id: ID of run this batch of papers was found in
         :param hits: List of papers and their OpenAlex search ranking
         """
-        # wrapper to keep relationship logic internal
-
         # get match ids
         match_ids, dtos = [], []
         for p, _ in hits:
@@ -185,6 +197,43 @@ class PaperDatabase(Neo4jDatabase):
         """
         with self._driver.session() as session:
             session.run(query, run_id=run_id, ranked_papers=ranked_papers)
+
+        # update title embeddings
+        self._update_missing_title_embeddings()
+
+    def _update_missing_title_embeddings(self) -> None:
+        """
+        Fetch all papers that are missing title embeddings and calculate and set value
+        """
+
+        missing_title_embeddings_query = f"""
+        MATCH (p:{NodeType.PAPER.value})
+        WHERE p.title_embedding IS NULL
+        RETURN p.match_id AS match_id, p.id AS id
+        """
+        # fetch titles with missing embeddings
+        with self._driver.session() as session:
+            result = session.run(missing_title_embeddings_query)
+            missing = [r.data() for r in result]
+
+        # exit early if nothing to update
+        if not missing:
+            return
+
+        # else generate embeddings and update
+        titles = [p['id'] for p in missing]
+        title_embeddings = self._embedding_model.encode(titles, show_progress_bar=False).tolist()
+        update_query = f"""
+        UNWIND $rows AS row
+        MATCH (p:{NodeType.PAPER.value} {{match_id: row.match_id}})
+        SET p.title_embedding = row.embedding
+        """
+        rows = [
+            {"match_id": paper["match_id"], "embedding": emb}
+            for paper, emb in zip(missing, title_embeddings)
+        ]
+        with self._driver.session() as session:
+            session.run(update_query, rows=rows)
 
     def insert_citation_paper_batch(self, source_title: str, papers: List[PaperDTO]) -> None:
         """

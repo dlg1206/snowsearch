@@ -26,6 +26,7 @@ nodes:
     properties:
       - "openalex_id"
       - "doi"
+      - "title_embedding"
       - "abstract_text"
       - "abstract_embedding"
       - "is_open_access"
