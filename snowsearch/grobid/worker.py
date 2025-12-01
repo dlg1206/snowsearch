@@ -132,7 +132,8 @@ class GrobidWorker:
         doc = grobid_tei_xml.parse_document_xml(content)
         logger.debug_msg(f"Processed '{tmp_pdf.name}' in {timer.format_time()}s | {title}")
 
-        return GrobidDTO(title, doc.abstract, [PaperDTO(c.title, c.doi) for c in doc.citations])
+        return GrobidDTO(title, doc.abstract,
+                         [PaperDTO(c.title, c.doi, time_added=datetime.now()) for c in doc.citations if c.title])
 
     async def enrich_papers(self, paper_db: PaperDatabase, papers: List[PaperDTO]) -> int:
         """
@@ -143,7 +144,7 @@ class GrobidWorker:
         :return Number of papers successfully processed
         """
         num_success = 0
-        citations = set()
+        unique_citations = set()
         num_fail_download = 0
         num_fail_process = 0
         num_misc_error = 0
@@ -164,12 +165,9 @@ class GrobidWorker:
                                                        grobid_status=200,
                                                        time_grobid_processed=datetime.now()))
                         # add referenced papers, if any
-                        new_papers = []
                         if result.citations:
-                            for c in result.citations:
-                                new_papers.append(PaperDTO(c.id, doi=c.doi, time_added=datetime.now()))
-                                citations.add(c)
-                            paper_db.insert_citation_paper_batch(result.id, new_papers)
+                            unique_citations.update(result.citations)
+                            paper_db.insert_citation_paper_batch(result.id, result.citations)
 
                         num_success += 1
 
@@ -207,7 +205,7 @@ class GrobidWorker:
             percent = lambda a, b: f"{(a / b) * 100:.01f}%"
             logger.info(
                 f"Processing complete, successfully download and processed {num_success} papers ({percent(num_success, len(papers))})")
-            logger.debug_msg(f"Found {len(citations)} citations")
+            logger.debug_msg(f"Found {len(unique_citations)} citations")
             logger.debug_msg(
                 f"Failed to download {num_fail_download} papers ({percent(num_fail_download, len(papers))})")
             logger.debug_msg(f"Failed to process {num_fail_process} papers ({percent(num_fail_process, len(papers))})")
