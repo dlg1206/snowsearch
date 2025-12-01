@@ -13,17 +13,14 @@ snowball:
   # Leave blank for no upper limit
   papers_per_round: 3
 
-  # For each paper in a round, the upper limit of the number of citations (new papers) to download and process
-  # Leave blank for no upper limit
-  citations_per_paper: 3
-
-  # Minimum similarity score between the prompt and abstract, must be [-1,1], but 0.4 is recommended
-  # Increasing will reduce the number of valid papers, potentially limiting the snowball pool
+  # Minimum similarity score between the natural language query and title / abstract.
+  # Must be [-1,1], but 0.4 is recommended.
+  # Increasing will reduce the number of valid papers, potentially limiting the snowball pool.
   # Decreasing will increase the number of valid papers, potentially adding a lot of noise to the pool
   # It is recommended to keep this value somewhat low to cast a wide net, after which the score can be
   # increased when ranking papers
   # REQUIRED
-  min_abstract_score: .4
+  min_similarity_score: .4
 
 # Options for generating Elastic search query for OpenAlex
 # REQUIRED
@@ -51,7 +48,7 @@ query_generation:
     # If using ollama, specify a tag model to use, will default to 'latest'
     tag: 8b
 
-# Options for ranking abstracts
+# Options for ranking papers
 # REQUIRED
 abstract_ranking:
   # LLM Options
@@ -81,12 +78,6 @@ abstract_ranking:
   # REQUIRED
   context_window: 8000
 
-  # Number of abstracts per ranking, will default to 2
-  # If using a larger model, this can be increased to reduce the number of API calls made or kept low to keep a
-  # more detailed analysis of each abstract. For smaller models, keeping this number low keeps the abstracts
-  # within the smaller context window
-  # abstracts_per_comparison:
-
   # Average tokens per word, will default to 1.2
   # tokens_per_word:
 
@@ -96,12 +87,9 @@ abstract_ranking:
   # REQUIRED
   min_abstract_score: .6
 
-  # Upper limit of abstracts that meet the minimum abstract threshold score
-  # Default is 100
-  # abstract_limit:
-
-  # Final top papers to present.
+  # Number of papers to rank
   # All abstracts will need to fit inside context window for final ranking.
+  # For reference, 1 abstract ~= 250 - 500 tokens
   # REQUIRED
   top_n_papers: 10
 

@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from typing import List
 
+from openalex.dto import PaperDTO
+
 """
 File: dto.py
 Description: DTOs for Grobid
@@ -10,17 +12,7 @@ Description: DTOs for Grobid
 
 
 @dataclass
-class CitationDTO:
-    id: str
-    doi: str
-    citation_count: int = None
-
-    def __hash__(self):
-        return hash(self.id) + hash(self.doi)
-
-
-@dataclass
 class GrobidDTO:
     id: str
     abstract: str
-    citations: List[CitationDTO]
+    citations: List[PaperDTO]

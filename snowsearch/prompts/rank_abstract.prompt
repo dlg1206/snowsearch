@@ -8,8 +8,8 @@ You must return your ranking strictly as valid JSON in the format shown below. D
 🧾 JSON Format:
 ========================
 {
-  "1": <title>,
-  "2": <title>,
+  "1": <uuid>,
+  "2": <uuid>,
   ...
 }
 
@@ -17,10 +17,10 @@ You must return your ranking strictly as valid JSON in the format shown below. D
 ✅ Example:
 ========================
 {
-  "1": "Generative artificial intelligence (AI) powered conversational educational agents: The inevitable paradigm shift",
-  "2": "Single and Multi-Agent Deep Reinforcement Learning for AI-Enabled Wireless Networks: A Tutorial",
+  "1": "59732",
+  "2": "18347",
   ...
-  "{total_abstracts}": "An Empathy-Driven, Conversational Artificial Intelligence Agent (Wysa) for Digital Mental Well-Being: Real-World Data Evaluation Mixed-Methods Study"
+  "{total_abstracts}": "90214"
 }
 
 ========================

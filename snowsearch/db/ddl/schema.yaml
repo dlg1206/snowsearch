@@ -12,8 +12,8 @@ nodes:
       - "start"
       - "end"
       - "openalex_model"
-      - "openalex_prompt"
-      - "openalex_query"
+      - "openalex_query_input"
+      - "openalex_query_output"
     relationships:
       # This run added this paper
       ADDED:
@@ -24,8 +24,9 @@ nodes:
     required_properties:
       - "id"
     properties:
-      - "openalex_id"
+      - "openalex_url"
       - "doi"
+      - "title_embedding"
       - "abstract_text"
       - "abstract_embedding"
       - "is_open_access"

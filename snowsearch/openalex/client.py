@@ -9,7 +9,6 @@ from yarl import URL
 from ai.model import ModelClient
 from db.config import DOI_PREFIX
 from db.paper_database import PaperDatabase
-from grobid.dto import CitationDTO
 from openalex.config import POLITE_RATE_LIMIT_SLEEP, DEFAULT_RATE_LIMIT_SLEEP, MAX_PER_PAGE, OPENALEX_BASE, \
     QUERY_JSON_RE, MAX_RETRIES, NL_TO_QUERY_CONTEXT_FILE, MAX_DOI_PER_PAGE
 from openalex.dto import PaperDTO
@@ -92,43 +91,43 @@ class OpenAlexClient:
             response.raise_for_status()
             return await response.json()
 
-    async def _fetch_page(self, session: ClientSession, query: str, cursor: str = '*') -> Tuple[str, List[PaperDTO]]:
+    async def _fetch_page(self, session: ClientSession, oa_query: str, cursor: str = '*') -> Tuple[str, List[PaperDTO]]:
         """
         Search for query from OpenAlex
 
         :param session: HTTP session to use
-        :param query: Query string to use
+        :param oa_query: OpenAlex query string to use
         :param cursor: Cursor to use for pagination (Default: starting cursor)
         https://docs.openalex.org/how-to-use-the-api/get-lists-of-entities/paging?q=per_page#cursor-paging
         :return: Cursor for next page and list of papers
         """
         # fetch papers
-        params = {'filter': f"title_and_abstract.search:{query}", 'cursor': cursor}
+        params = {'filter': f"title_and_abstract.search:{oa_query}", 'cursor': cursor}
         result = await self._fetch(session, "works", params)
 
         # parse findings
         return result['meta']['next_cursor'], [
             PaperDTO(p['title'],
-                     openalex_id=p['id'],
+                     openalex_url=p['id'],
                      doi=p['doi'],
                      is_open_access=bool(p['open_access']['is_oa']),
                      pdf_url=p['open_access']['oa_url'])
             for p in result.get('results', [])
         ]
 
-    async def _fetch_paper_count(self, session: ClientSession, query: str) -> int:
+    async def _fetch_paper_count(self, session: ClientSession, oa_query: str) -> int:
         """
         Get the number of papers that match the given query
 
         :param session: HTTP session to use
-        :param query: Query string to use
+        :param oa_query: OpenAlex query string to use
         :return: Number of papers the query matches
         """
-        result = await self._fetch(session, "works", {'filter': f"title_and_abstract.search:{query}"}, 1)
+        result = await self._fetch(session, "works", {'filter': f"title_and_abstract.search:{oa_query}"}, 1)
         return int(result['meta']['count'])
 
-    async def _batch_fetch_by_doi(self, session: ClientSession, doi_batch: List[str]) -> Tuple[
-        List[PaperDTO], List[str]]:
+    async def _batch_fetch_by_doi(self, session: ClientSession,
+                                  doi_batch: List[str]) -> Tuple[List[PaperDTO], List[str]]:
         """
         Fetch a batch of papers using DOIs
 
@@ -145,7 +144,7 @@ class OpenAlexClient:
         papers = []
         for p in results.get('results', []):
             paper = PaperDTO(p['title'],
-                             openalex_id=p['id'],
+                             openalex_url=p['id'],
                              doi=p['doi'],
                              is_open_access=bool(p['open_access']['is_oa']),
                              pdf_url=p['open_access']['oa_url'])
@@ -179,21 +178,22 @@ class OpenAlexClient:
         if paper['title'].lower() != title.lower():
             return None
         return PaperDTO(paper['title'],
-                        openalex_id=paper['id'],
+                        openalex_url=paper['id'],
                         doi=paper['doi'],
                         is_open_access=bool(paper['open_access']['is_oa']),
                         pdf_url=paper['open_access']['oa_url'])
 
-    async def save_seed_papers(self, run_id: int, paper_db: PaperDatabase, query: str) -> None:
+    async def search_and_save_metadata(self, run_id: int, paper_db: PaperDatabase, oa_query: str) -> None:
         """
-        Fetch papers from OpenAlex based on a query and save to database
+        Fetch paper metadata from OpenAlex based on a query and save to database
 
         :param run_id: ID of current run
         :param paper_db: Database to save papers to
-        :param query: Query string to use
+        :param oa_query: OpenAlex query string to use
         """
+        oa_query = oa_query.replace("'", '"')
         async with ClientSession() as session:
-            hits = await self._fetch_paper_count(session, query)
+            hits = await self._fetch_paper_count(session, oa_query)
             logger.debug_msg(f"Found {hits} papers in OpenAlex")
             progress = logger.get_data_queue(hits, "Querying OpenAlex Database", "paper")
             # fetch all papers
@@ -202,10 +202,13 @@ class OpenAlexClient:
             while True:
                 try:
                     # save results
-                    next_cursor, papers = await self._fetch_page(session, query, next_cursor)
+                    # todo when papers are null
+                    next_cursor, papers = await self._fetch_page(session, oa_query, next_cursor)
                     ranked_papers = [(papers[i], i + rank_offset) for i in range(0, len(papers))]
                     rank_offset += len(papers)
-                    paper_db.insert_run_paper_batch(run_id, ranked_papers)
+                    if ranked_papers:
+                        paper_db.insert_run_paper_batch(run_id, ranked_papers)
+                    # break
                     # no pages left
                     if not next_cursor:
                         break
@@ -217,12 +220,16 @@ class OpenAlexClient:
                     if not isinstance(progress, int):
                         progress.update(MAX_PER_PAGE)
 
-    async def save_citation_papers(self, paper_db: PaperDatabase, citations: List[CitationDTO]) -> None:
+    async def fetch_and_save_citation_metadata(self,
+                                               paper_db: PaperDatabase,
+                                               citations: List[PaperDTO],
+                                               skip_title_search: bool = False) -> None:
         """
         Fetch details for the given list of citations and save to database
 
         :param paper_db: Database to save papers to
         :param citations: List of citations to fetch details for
+        :param skip_title_search: Optional skip title search (Default: False)
         """
         semaphore = Semaphore()  # semaphore so only 1 request at a time to prevent tripping rate limit
         num_doi = 0
@@ -232,7 +239,7 @@ class OpenAlexClient:
         # split into doi, title and just doi search
         doi_and_title = []
         doi_reverse_lookup = {}
-        titles: List[CitationDTO] = []
+        titles: List[PaperDTO] = []
         for c in citations:
             if c.doi:
                 doi_and_title.append(c.doi)
@@ -245,61 +252,63 @@ class OpenAlexClient:
             # pass 1 - fetch by DOI
             doi_tasks = [_fetch_doi_batch_wrapper(semaphore, self._batch_fetch_by_doi(session, chunk))
                          for chunk in doi_chunks]
-            for future in logger.get_data_queue(doi_tasks, "Fetching citation details by doi", "batch",
-                                                is_async=True):
+            for future in logger.get_data_queue(doi_tasks, "Fetching citation details by doi", "batch", is_async=True):
                 found_papers, missing_doi_ids = await future
                 num_doi += len(found_papers)
                 # save titles for second pass
                 titles += [doi_reverse_lookup.get(doi) for doi in missing_doi_ids]
-                # save rest
-                paper_db.insert_paper_batch(found_papers)
+                # save rest if any
+                if found_papers:
+                    paper_db.insert_paper_batch(found_papers)
 
             # pass 2 - fetch by title
-            title_tasks = [_fetch_title_wrapper(semaphore, c, self._fetch_by_exact_title(session, c.id)) for c in
-                           titles]
-            for future in logger.get_data_queue(title_tasks, "Fetching citation details by title", "citation",
-                                                is_async=True):
-                try:
-                    paper = await future
-                    num_title += 1
-                    paper_db.upsert_paper(paper)
-                    logger.debug_msg(f"Found '{paper.id}' by title")
-                except MissingOpenAlexEntryError as e:
-                    num_missing += 1
-                    logger.error_exp(e)
-                    paper_db.upsert_paper(PaperDTO(e.title, openalex_status=404))
-                except Exception as e:
-                    num_missing += 1
-                    logger.error_exp(e)
-
+            if not skip_title_search:
+                title_tasks = [_fetch_title_wrapper(semaphore, c, self._fetch_by_exact_title(session, c.id)) for c in
+                               titles]
+                for future in logger.get_data_queue(title_tasks, "Fetching citation details by title", "citation",
+                                                    is_async=True):
+                    try:
+                        paper = await future
+                        num_title += 1
+                        paper_db.upsert_paper(paper)
+                        logger.debug_msg(f"Found '{paper.id}' by title")
+                    except MissingOpenAlexEntryError as e:
+                        num_missing += 1
+                        logger.error_exp(e)
+                        paper_db.upsert_paper(PaperDTO(e.title, openalex_status=404))
+                    except Exception as e:
+                        num_missing += 1
+                        logger.error_exp(e)
 
         # report results
-        percent = lambda a, b: f"{(a / b) * 100:.01f}%"
-        num_success = num_doi + num_title
-        logger.info(
-            f"Search complete, successfully updated {num_success} citations ({percent(num_success, len(citations))})")
-        logger.info(f"Found {num_doi} citations by DOI ({percent(num_doi, len(citations))})")
-        logger.info(f"Found {num_title} citations by title ({percent(num_title, len(citations))})")
-        logger.info(f"Failed to find {num_missing} citations ({percent(num_missing, len(citations))})")
+        if len(citations):
+            percent = lambda a, b: f"{(a / b) * 100:.01f}%"
+            num_success = num_doi + num_title
+            logger.info(
+                f"Search complete, successfully updated {num_success} citations ({percent(num_success, len(citations))})")
+            logger.debug_msg(f"Found {num_doi} citations by DOI ({percent(num_doi, len(citations))})")
+            logger.debug_msg(f"Found {num_title} citations by title ({percent(num_title, len(citations))})")
+            logger.debug_msg(f"Failed to find {num_missing} citations ({percent(num_missing, len(citations))})")
 
-    def prompt_to_query(self, prompt: str) -> str:
+    async def generate_openalex_query(self, nl_query: str) -> str:
         """
         Use an LLM to convert a natural language search query
         to an OpenAlex style search query based on Elasticsearch query
 
         https://docs.openalex.org/how-to-use-the-api/get-lists-of-entities/search-entities#boolean-searches
 
-        :param prompt: Natural language query for papers
+        :param nl_query: Natural language query for papers
         :raises ExceedMaxQueryGenerationAttemptsError: If fail to extract query from model reply
         :return: OpenAlex query string
         """
+        nl_query = nl_query.replace("'", '"')
         # error if exceed retries
         for attempt in range(0, MAX_RETRIES):
-            logger.info(f"Generating OpenAlex query ({attempt + 1}/{MAX_RETRIES})")
-            completion, timer = self._model_client.prompt(
+            logger.info(f"Generating OpenAlex query ({attempt + 1}/{MAX_RETRIES}) | prompt: {nl_query.strip()}")
+            completion, timer = await self._model_client.prompt(
                 messages=[
                     {"role": "system", "content": self._nl_to_query_context},
-                    {"role": "user", "content": f"\nNatural language prompt:\n{prompt.strip()}"}
+                    {"role": "user", "content": f"\nNatural language prompt:\n{nl_query.strip()}"}
                 ],
                 temperature=0
             )
@@ -337,7 +346,7 @@ async def _fetch_doi_batch_wrapper(semaphore: Semaphore, callback) -> Tuple[List
         return await callback
 
 
-async def _fetch_title_wrapper(semaphore: Semaphore, citation: CitationDTO, callback) -> PaperDTO:
+async def _fetch_title_wrapper(semaphore: Semaphore, citation: PaperDTO, callback) -> PaperDTO:
     """
     Util wrapper for title fetching to respect semaphore
 

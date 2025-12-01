@@ -8,7 +8,7 @@ from ai import ollama
 from ai.ollama import OLLAMA_HOST_ENV, OLLAMA_PORT_ENV
 from ai.openai import OPENAI_API_KEY_ENV
 from grobid.config import MAX_GROBID_REQUESTS, MAX_CONCURRENT_DOWNLOADS, MAX_PDF_COUNT, GROBID_SERVER_ENV
-from rank.config import MIN_ABSTRACT_PER_COMPARISON, AVG_TOKEN_PER_WORD
+from rank.config import AVG_TOKEN_PER_WORD
 
 """
 File: config_parser.py
@@ -40,18 +40,12 @@ class RankingConfigDTO:
     context_window: int
     min_abstract_score: float
     top_n_papers: int
-    abstract_limit: int = 100
-    abstracts_per_comparison: int = None
     tokens_per_word: float = None
 
     def __post_init__(self) -> None:
         # ensure context is positive
         if self.context_window <= 0:
             raise ValueError("Context window must be greater than 0")
-
-        # ensure abstract comparisons is positive
-        if self.abstracts_per_comparison and self.abstracts_per_comparison < 2:
-            raise ValueError("Need at least 2 abstracts to compare")
 
         # ensure tokens per word is positive
         if self.tokens_per_word and self.tokens_per_word <= 0:
@@ -60,7 +54,7 @@ class RankingConfigDTO:
 
 @dataclass
 class OpenAlexConfigDTO:
-    email: str = None
+    email: str | None = None
 
 
 @dataclass
@@ -87,26 +81,22 @@ class GrobidConfigDTO:
 @dataclass
 class SnowballConfigDTO:
     rounds: int
-    min_abstract_score: float
+    min_similarity_score: float
     seed_paper_limit: int = None
     papers_per_round: int = None
-    citations_per_paper: int = None
 
     def __post_init__(self):
         if self.rounds < 0:
             raise ValueError("Snowball rounds cannot be negative")
 
-        if self.min_abstract_score < -1 or self.min_abstract_score > 1:
-            raise ValueError("Min abstract score must between -1 and 1")
+        if self.min_similarity_score < -1 or self.min_similarity_score > 1:
+            raise ValueError("Min similarity score must between -1 and 1")
 
         if self.seed_paper_limit and self.seed_paper_limit < 1:
             raise ValueError("Seed round needs at least 1 paper")
 
         if self.papers_per_round and self.papers_per_round < 1:
             raise ValueError("Each snowball round needs at least 1 paper")
-
-        if self.citations_per_paper and self.citations_per_paper < 1:
-            raise ValueError("Papers need at least 1 citation per paper")
 
 
 class Config:
@@ -170,15 +160,14 @@ def _load_snowball_config(key: str, config: Dict[str, Any]) -> SnowballConfigDTO
     # ensure required keys are present
     if not config.get('rounds'):
         raise KeyError(f"Missing required key '{key}.rounds'")
-    if not config.get('min_abstract_score'):
-        raise KeyError(f"Missing required key '{key}.min_abstract_score'")
+    if not config.get('min_similarity_score'):
+        raise KeyError(f"Missing required key '{key}.min_similarity_score'")
 
     # return dto
     return SnowballConfigDTO(config['rounds'],
-                             config['min_abstract_score'],
+                             config['min_similarity_score'],
                              config.get('seed_paper_limit'),
-                             config.get('papers_per_round'),
-                             config.get('citations_per_paper'))
+                             config.get('papers_per_round'))
 
 
 def _load_agent_config(key: str, config: Dict[str, Any]) -> AgentConfigDTO:
@@ -237,8 +226,6 @@ def _load_ranking_config(key: str, config: Dict[str, Any]) -> RankingConfigDTO:
                             config['context_window'],
                             config['min_abstract_score'],
                             config['top_n_papers'],
-                            config.get('abstracts_limit', 100),
-                            config.get('abstracts_per_comparison', MIN_ABSTRACT_PER_COMPARISON),
                             config.get('tokens_per_word', AVG_TOKEN_PER_WORD))
 
 
