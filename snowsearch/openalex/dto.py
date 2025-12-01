@@ -1,7 +1,7 @@
 from dataclasses import dataclass, fields
 from datetime import datetime
-
 from typing import Dict
+
 from db.config import DOI_PREFIX
 
 """
@@ -46,3 +46,6 @@ class PaperDTO:
 
         if self.abstract_text:
             self.abstract_text = self.abstract_text.strip()
+
+    def __hash__(self):
+        return hash(self.id) + hash(self.doi)

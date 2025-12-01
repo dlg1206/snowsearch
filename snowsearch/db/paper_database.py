@@ -9,7 +9,6 @@ from sentence_transformers import SentenceTransformer
 from db.config import DEFAULT_EMBEDDING_MODEL, DEFAULT_DIMENSIONS, SENTENCE_TRANSFORMER_CACHE, DOI_PREFIX
 from db.database import Neo4jDatabase
 from db.entity import Node, NodeType, RelationshipType
-from grobid.dto import CitationDTO
 from openalex.dto import PaperDTO
 from util.logger import logger
 from util.timer import Timer
@@ -411,24 +410,25 @@ class PaperDatabase(Neo4jDatabase):
             results = session.run(query, **params)
             return [(r.get('id'), r.get('titleScore'), r.get('abstractScore')) for r in results]
 
-    def get_citations(self, source_title: str, unprocessed: bool = False) -> List[CitationDTO]:
+    def get_citations(self, source_title: str, unprocessed: bool = False) -> List[PaperDTO]:
         """
         Get citations for a given paper
 
         :param source_title: Title of paper to get citations for
         :param unprocessed: Only get unprocessed citations (Default: False)
-        :return: List of unprocessed citations in order of most to least referenced
+        :return: List of citations
         """
         query = f"""
         MATCH (s:{NodeType.PAPER.value})-[:{RelationshipType.REFERENCES.value}]->(c:{NodeType.PAPER.value})
         WHERE s.id = $source_title
         {'AND c.download_status IS NULL AND c.openalex_status IS NULL' if unprocessed else ''}
-        RETURN c.id AS id, c.doi AS doi
+        RETURN c
         """
         # exe query
         with self._driver.session() as session:
-            results = session.run(query, source_title=source_title)
-            return [CitationDTO(r.get('id'), r.get('doi')) for r in results]
+            citations = [r['c'] for r in list(session.run(query, source_title=source_title))]
+            # convert to dtos
+            return [PaperDTO.create_dto(c) for c in citations]
 
 
 def _is_model_local(embedding_model: str) -> bool:

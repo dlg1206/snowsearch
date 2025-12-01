@@ -9,7 +9,6 @@ from yarl import URL
 from ai.model import ModelClient
 from db.config import DOI_PREFIX
 from db.paper_database import PaperDatabase
-from grobid.dto import CitationDTO
 from openalex.config import POLITE_RATE_LIMIT_SLEEP, DEFAULT_RATE_LIMIT_SLEEP, MAX_PER_PAGE, OPENALEX_BASE, \
     QUERY_JSON_RE, MAX_RETRIES, NL_TO_QUERY_CONTEXT_FILE, MAX_DOI_PER_PAGE
 from openalex.dto import PaperDTO
@@ -221,7 +220,7 @@ class OpenAlexClient:
                     if not isinstance(progress, int):
                         progress.update(MAX_PER_PAGE)
 
-    async def fetch_and_save_citation_metadata(self, paper_db: PaperDatabase, citations: List[CitationDTO]) -> None:
+    async def fetch_and_save_citation_metadata(self, paper_db: PaperDatabase, citations: List[PaperDTO]) -> None:
         """
         Fetch details for the given list of citations and save to database
 
@@ -236,7 +235,7 @@ class OpenAlexClient:
         # split into doi, title and just doi search
         doi_and_title = []
         doi_reverse_lookup = {}
-        titles: List[CitationDTO] = []
+        titles: List[PaperDTO] = []
         for c in citations:
             if c.doi:
                 doi_and_title.append(c.doi)
@@ -277,13 +276,14 @@ class OpenAlexClient:
                     logger.error_exp(e)
 
         # report results
-        percent = lambda a, b: f"{(a / b) * 100:.01f}%"
-        num_success = num_doi + num_title
-        logger.info(
-            f"Search complete, successfully updated {num_success} citations ({percent(num_success, len(citations))})")
-        logger.debug_msg(f"Found {num_doi} citations by DOI ({percent(num_doi, len(citations))})")
-        logger.debug_msg(f"Found {num_title} citations by title ({percent(num_title, len(citations))})")
-        logger.debug_msg(f"Failed to find {num_missing} citations ({percent(num_missing, len(citations))})")
+        if len(citations):
+            percent = lambda a, b: f"{(a / b) * 100:.01f}%"
+            num_success = num_doi + num_title
+            logger.info(
+                f"Search complete, successfully updated {num_success} citations ({percent(num_success, len(citations))})")
+            logger.debug_msg(f"Found {num_doi} citations by DOI ({percent(num_doi, len(citations))})")
+            logger.debug_msg(f"Found {num_title} citations by title ({percent(num_title, len(citations))})")
+            logger.debug_msg(f"Failed to find {num_missing} citations ({percent(num_missing, len(citations))})")
 
     async def generate_openalex_query(self, nl_query: str) -> str:
         """
@@ -341,7 +341,7 @@ async def _fetch_doi_batch_wrapper(semaphore: Semaphore, callback) -> Tuple[List
         return await callback
 
 
-async def _fetch_title_wrapper(semaphore: Semaphore, citation: CitationDTO, callback) -> PaperDTO:
+async def _fetch_title_wrapper(semaphore: Semaphore, citation: PaperDTO, callback) -> PaperDTO:
     """
     Util wrapper for title fetching to respect semaphore
 
