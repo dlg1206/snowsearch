@@ -101,7 +101,7 @@ class PaperDatabase(Neo4jDatabase):
         self.insert_node(run_node)
         return new_run_id
 
-    def insert_openalex_query(self, run_id: int, model: str, prompt: str, query: str) -> None:
+    def insert_openalex_query(self, run_id: int, model: str, nl_query: str, oa_query: str) -> None:
         """
         Update a run with the openalex prompt and resulting query
 
@@ -110,14 +110,14 @@ class PaperDatabase(Neo4jDatabase):
 
         :param run_id: ID of run
         :param model: Model used to generate OpenAlex query
-        :param prompt: Original natural language prompt
-        :param query: Resulting OpenAlex query
+        :param nl_query: Original natural language prompt
+        :param oa_query: Resulting OpenAlex query
         """
         run_node = Node.create(NodeType.RUN, {
             'id': run_id,
             'openalex_model': model,
-            'openalex_prompt': prompt,
-            'openalex_query': query
+            'openalex_query_input': nl_query,
+            'openalex_query_output': oa_query
         })
         self.insert_node(run_node, True)
 

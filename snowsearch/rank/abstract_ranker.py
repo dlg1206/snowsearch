@@ -98,11 +98,11 @@ class AbstractRanker:
 
         return bins
 
-    def _rank_abstracts(self, prompt: str, abstracts: List[AbstractDTO]) -> List[AbstractDTO]:
+    def _rank_abstracts(self, nl_query: str, abstracts: List[AbstractDTO]) -> List[AbstractDTO]:
         """
         Use an LLM to rank abstracts from most to least relevant based on the provided prompt
 
-        :param prompt: Natural language query for papers
+        :param nl_query: Natural language query for papers
         :raises ExceedMaxRankingGenerationAttemptsError: If fail to extract ranking from model reply
         :return: Ordered list of most relevant abstracts
         """
@@ -113,7 +113,7 @@ class AbstractRanker:
             final_prompt += f"Title:\n{a.id}\nAbstract:\n{a.text}\n\n"
             abstract_lookup[a.id] = a
 
-        final_prompt += f"Search:\n{prompt.strip()}"
+        final_prompt += f"Search:\n{nl_query.strip()}"
 
         context = self._rank_context.replace("{total_abstracts}", str(len(abstracts)))
 
@@ -148,11 +148,11 @@ class AbstractRanker:
         # error if exceed retries
         raise ExceedMaxRankingGenerationAttemptsError(self._model_client.model)
 
-    def _filter_abstracts(self, prompt: str, abstracts: List[AbstractDTO], min_abstracts: int) -> List[AbstractDTO]:
+    def _filter_abstracts(self, nl_query: str, abstracts: List[AbstractDTO], min_abstracts: int) -> List[AbstractDTO]:
         """
         Filter abstracts tournament style to get the top most relevant papers
 
-        :param prompt: Search prompt to match
+        :param nl_query: Search prompt to match
         :param abstracts: List of abstracts to filter
         :param min_abstracts: Minimum abstracts that must be returned
         :return: List of top abstracts
@@ -177,7 +177,7 @@ class AbstractRanker:
             # Step 2: Select one from each bin
             selected = []
             for b in logger.get_data_queue(bins, f"Round {round_num + 1} | Ranking with LLM", "ranking"):
-                selected.append(self._rank_abstracts(prompt, b)[0])  # get the best ranked abstract
+                selected.append(self._rank_abstracts(nl_query, b)[0])  # get the best ranked abstract
 
             current_abstracts = selected
             round_num += 1
@@ -185,11 +185,11 @@ class AbstractRanker:
         logger.info(f"Completed filtering in {timer.format_time()}s | {len(current_abstracts)} papers remain")
         return current_abstracts
 
-    def rank_papers(self, prompt: str, papers: List[PaperDTO], top_n: int) -> List[PaperDTO]:
+    def rank_papers(self, nl_query: str, papers: List[PaperDTO], top_n: int) -> List[PaperDTO]:
         """
         Rank a list of papers using an llm
 
-        :param prompt: Search prompt to match
+        :param nl_query: Search prompt to match
         :param papers: List of papers to rank
         :param top_n: Number of top papers to find
         :return: Ordered list of the most relevant to the prompt
@@ -209,11 +209,11 @@ class AbstractRanker:
             for p in papers
         ]
         # filter papers if not enough to do final ranking
-        top_abstracts = self._filter_abstracts(prompt, abstracts, top_n) if len(abstracts) > top_n else abstracts
+        top_abstracts = self._filter_abstracts(nl_query, abstracts, top_n) if len(abstracts) > top_n else abstracts
 
         logger.info(f"Performing final ranking")
         timer = Timer()
-        ranked_abstracts = self._rank_abstracts(prompt, top_abstracts)
+        ranked_abstracts = self._rank_abstracts(nl_query, top_abstracts)
         logger.info(f"Final ranking determined in {timer.format_time()}s")
 
         # convert back to papers
