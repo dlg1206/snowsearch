@@ -1,4 +1,5 @@
 import asyncio
+import csv
 from argparse import Namespace
 
 from dotenv import load_dotenv
@@ -37,8 +38,14 @@ async def _execute(db: PaperDatabase, args: Namespace) -> None:
         case 'snowball':
             config = Config(args.config)
             papers_per_round = None if args.no_limit else config.snowball.papers_per_round
+            if args.seed_papers_input:
+                with open(args.seed_papers_input, 'r') as f:
+                    reader = csv.reader(f)
+                    seed_papers = [r[0] for r in reader]
+            else:
+                seed_papers = args.seed_papers
             # start snowball
-            await run_snowball(db, config, args.semantic_search, papers_per_round, args.seed_papers)
+            await run_snowball(db, config, args.semantic_search, papers_per_round, seed_papers)
 
 
 def main() -> None:

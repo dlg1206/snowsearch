@@ -72,6 +72,13 @@ async def snowball(db: PaperDatabase,
                 # todo custom error
                 raise Exception("No papers to snowball with")
 
+        # warn if couldn't find seed paper
+        if seed_papers and len(paper_dtos) != len(seed_papers) and not r:
+            seed_papers_set = set(seed_papers)
+            round_one_titles = {p.id for p in paper_dtos}
+            for missing_title in seed_papers_set - round_one_titles:
+                logger.warn(f"Could not find seed paper '{missing_title}' in the database")
+
         logger.info(f"Starting Snowball Round {r + 1} / {n_rounds}")
         timer = Timer()
 
@@ -120,6 +127,8 @@ async def run_snowball(db: PaperDatabase,
     # perform N rounds of snowballing
     timer = Timer()
     logger.info(f"Starting {config.snowball.rounds} rounds of snowballing")
+    if seed_paper_titles:
+        logger.info(f"Starting snowball with {len(seed_paper_titles)} seed papers")
     processed_papers, new_citations = await snowball(db, openalex_client, grobid_worker, config.snowball.rounds,
                                                      nl_query=nl_query,
                                                      papers_per_round=papers_per_round,

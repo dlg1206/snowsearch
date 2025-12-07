@@ -77,13 +77,19 @@ def create_parser() -> ArgumentParser:
                           action="store_true",
                           help="Set no citation cap and process all new unprocessed papers")
 
-    snowball.add_argument('-sp', '--seed-papers',
+    snowball_group = snowball.add_mutually_exclusive_group()
+    snowball_group.add_argument('-sp', '--seed-papers',
                           metavar="<paper-title>",
                           type=str,
                           nargs="+",
                           help="One or more paper titles to start snowballing with. i.e \"Graph Attention Networks\" \"GINE\"")
 
-    # logging flags
+    snowball_group.add_argument('-i', '--seed-papers-input',
+                                metavar="<csv-file-path>",
+                                type=str,
+                                help="Path to csv file with list of paper titles to start snowballing with")
+
+# logging flags
     logging = parser.add_argument_group("Logging")
     logging.add_argument("-l", "--log-level",
                          metavar="<log level>",
