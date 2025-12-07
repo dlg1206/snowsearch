@@ -326,7 +326,7 @@ class PaperDatabase(Neo4jDatabase):
         :return: List of PaperDTOs
         """
         # build query
-        match_ids = [Node.create(NodeType.PAPER, {'id': t}).match_id for t in titles]
+        match_ids = [Node.create(NodeType.PAPER, {'id': t.strip()}).match_id for t in titles]
         query = f"""
         UNWIND $match_ids AS id
         MATCH (p:{NodeType.PAPER.value} {{match_id: id}})
@@ -335,6 +335,27 @@ class PaperDatabase(Neo4jDatabase):
         # exe query
         with self._driver.session() as session:
             papers = [r['p'] for r in list(session.run(query, match_ids=match_ids))]
+            # convert to dtos
+            return [PaperDTO.create_dto(p) for p in papers]
+
+    def get_unprocessed_papers(self, paper_limit: int = None) -> List[PaperDTO]:
+        """
+        Get unprocessed papers from the database
+
+        :param paper_limit: Limit the max number of papers to return (Default: None)
+        :return: List of PaperDTOs
+        """
+        # build query
+        query = f"""
+        MATCH (p:{NodeType.PAPER.value})
+        WHERE p.pdf_url IS NOT NULL 
+        AND p.download_status IS NULL 
+        AND p.grobid_status IS NULL
+        RETURN p{f' LIMIT {paper_limit}' if paper_limit else ''}
+        """
+        # exe query
+        with self._driver.session() as session:
+            papers = [r['p'] for r in list(session.run(query))]
             # convert to dtos
             return [PaperDTO.create_dto(p) for p in papers]
 

@@ -4,8 +4,8 @@ from asyncio import Semaphore
 from typing import List, Dict, Tuple, Any
 
 from aiohttp import ClientSession
-from yarl import URL
 from tqdm.std import tqdm as TQDM
+from yarl import URL
 
 from ai.model import ModelClient
 from db.config import DOI_PREFIX
@@ -224,7 +224,6 @@ class OpenAlexClient:
         if isinstance(progress, TQDM):
             progress.close()
 
-
     async def fetch_and_save_citation_metadata(self,
                                                paper_db: PaperDatabase,
                                                citations: List[PaperDTO],
@@ -255,16 +254,18 @@ class OpenAlexClient:
 
         async with ClientSession() as session:
             # pass 1 - fetch by DOI
-            doi_tasks = [_fetch_doi_batch_wrapper(semaphore, self._batch_fetch_by_doi(session, chunk))
-                         for chunk in doi_chunks]
-            for future in logger.get_data_queue(doi_tasks, "Fetching citation details by doi", "batch", is_async=True):
-                found_papers, missing_doi_ids = await future
-                num_doi += len(found_papers)
-                # save titles for second pass
-                titles += [doi_reverse_lookup.get(doi) for doi in missing_doi_ids]
-                # save rest if any
-                if found_papers:
-                    paper_db.insert_paper_batch(found_papers)
+            if doi_chunks:
+                doi_tasks = [_fetch_doi_batch_wrapper(semaphore, self._batch_fetch_by_doi(session, chunk))
+                             for chunk in doi_chunks]
+                for future in logger.get_data_queue(doi_tasks, "Fetching citation details by doi", "batch",
+                                                    is_async=True):
+                    found_papers, missing_doi_ids = await future
+                    num_doi += len(found_papers)
+                    # save titles for second pass
+                    titles += [doi_reverse_lookup.get(doi) for doi in missing_doi_ids]
+                    # save rest if any
+                    if found_papers:
+                        paper_db.insert_paper_batch(found_papers)
 
             # pass 2 - fetch by title
             if not skip_title_search:

@@ -112,11 +112,11 @@ def _format_results(db: PaperDatabase, original_search: str, ranked_abstracts: L
         rank += 1
 
 
-async def slr(db: PaperDatabase,
-              config: Config,
-              nl_query: str,
-              oa_query: str = None,
-              json_output_path: str = None) -> None:
+async def run_slr(db: PaperDatabase,
+                  config: Config,
+                  nl_query: str,
+                  oa_query: str = None,
+                  json_output_path: str = None) -> None:
     """
     Perform a full literature search
 
@@ -136,7 +136,7 @@ async def slr(db: PaperDatabase,
     ranker = AbstractRanker(abstract_model,
                             config.ranking.context_window,
                             config.ranking.tokens_per_word)
-    # init grobid clien
+    # init grobid client
     grobid_worker = GrobidWorker(
         config.grobid.max_grobid_requests,
         config.grobid.max_concurrent_downloads,

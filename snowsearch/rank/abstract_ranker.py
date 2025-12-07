@@ -144,7 +144,7 @@ class AbstractRanker:
             try:
                 while True:
                     await asyncio.sleep(5)
-                    logger.info(f"{timer.format_time()} seconds elapsed")
+                    logger.info(f"{timer.format_time()} elapsed")
             except asyncio.CancelledError:
                 pass
 
