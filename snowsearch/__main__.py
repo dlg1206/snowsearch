@@ -5,10 +5,8 @@ from dotenv import load_dotenv
 
 from cli.parser import create_parser
 from cli.slr import run_slr
-from cli.snowball import snowball, run_snowball
+from cli.snowball import run_snowball
 from db.paper_database import PaperDatabase
-from grobid.worker import GrobidWorker
-from openalex.client import OpenAlexClient
 from util.config_parser import Config
 from util.logger import logger, Level
 
@@ -32,7 +30,10 @@ async def _execute(db: PaperDatabase, args: Namespace) -> None:
     match args.command:
         case 'slr':
             # todo - log if fail to connect to ollama / openai
-            await run_slr(db, Config(args.config), args.semantic_search, args.query, args.json)
+            await run_slr(db, Config(args.config), args.semantic_search,
+                          oa_query=args.query,
+                          skip_paper_ranking=args.skip_ranking,
+                          json_output_path=args.json)
         case 'snowball':
             config = Config(args.config)
             papers_per_round = None if args.no_limit else config.snowball.papers_per_round

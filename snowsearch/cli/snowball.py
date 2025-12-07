@@ -82,8 +82,8 @@ async def snowball(db: PaperDatabase,
         citations = []
         for p in paper_dtos:
             citations += db.get_citations(p.id, True)
-        new_citations += await openalex_client.fetch_and_save_citation_metadata(db,
-                                                                                citations)  # todo - config to skip title search
+        # todo - config to skip title search
+        new_citations += await openalex_client.fetch_and_save_citation_metadata(db, citations)
 
         # Repeat
         logger.info(f"Snowball Round {r + 1} completed in {timer.format_time()}s")

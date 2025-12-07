@@ -54,6 +54,7 @@ async def run_slr(db: PaperDatabase,
                   config: Config,
                   nl_query: str,
                   oa_query: str = None,
+                  skip_paper_ranking: bool = False,
                   json_output_path: str = None) -> None:
     """
     Perform a full literature search
@@ -62,6 +63,7 @@ async def run_slr(db: PaperDatabase,
     :param config: Config details for performing the search
     :param nl_query: Natural langauge search query to match papers to
     :param oa_query: Elasticsearch-like query to use for search OpenAlex instead of generating one (Default: None)
+    :param skip_paper_ranking: Skip ranking the most relevant papers using an LLM after snowballing (Default: False)
     :param json_output_path: Path to save results to instead of printing to stdout (Default: None)
     """
     # init OpenAlex client
@@ -104,6 +106,11 @@ async def run_slr(db: PaperDatabase,
                    papers_per_round=config.snowball.papers_per_round,
                    min_similarity_score=config.snowball.min_similarity_score)
     logger.info(f"Snowballing complete in {timer.format_time()}s")
+
+    # exit early if not ranking
+    if skip_paper_ranking:
+        logger.warn("Skipping paper ranking")
+        return
 
     # after snowballing, get top N papers that best match the prompt and rank them
     ranking_seed_titles = [t for t, _, _ in

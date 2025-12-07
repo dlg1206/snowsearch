@@ -50,10 +50,17 @@ def create_parser() -> ArgumentParser:
                      help="OpenAlex formatted query to use directly. "
                           "See https://docs.openalex.org/how-to-use-the-api/get-lists-of-entities/search-entities#boolean-searches for formatting rules")  # skip llm generation step
 
-    slr.add_argument('-j', '--json',
-                     metavar="<json-file-path>",
-                     type=str,
-                     help="Save the results to json file instead of printing to stdout")
+    slr_group = slr.add_mutually_exclusive_group()
+    slr_group.add_argument('-j', '--json',
+                           metavar="<json-file-path>",
+                           type=str,
+                           help="Save the results to json file instead of printing to stdout")
+
+    # exclusive since can't write to json if skip ranking
+    slr_group.add_argument('--skip-ranking',
+                           action="store_true",
+                           help="Skip the final paper ranking using an LLM",
+                           default=False)
 
     # snowball command - just perform snowballing without openalex search or llm ranking
     snowball = commands.add_parser('snowball',
