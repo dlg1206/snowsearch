@@ -227,13 +227,14 @@ class OpenAlexClient:
     async def fetch_and_save_citation_metadata(self,
                                                paper_db: PaperDatabase,
                                                citations: List[PaperDTO],
-                                               skip_title_search: bool = False) -> None:
+                                               skip_title_search: bool = False) -> int:
         """
         Fetch details for the given list of citations and save to database
 
         :param paper_db: Database to save papers to
         :param citations: List of citations to fetch details for
         :param skip_title_search: Optional skip title search (Default: False)
+        :return: Number of citations that the metadata was found
         """
         semaphore = Semaphore()  # semaphore so only 1 request at a time to prevent tripping rate limit
         num_doi = 0
@@ -295,6 +296,8 @@ class OpenAlexClient:
             logger.debug_msg(f"Found {num_doi} citations by DOI ({percent(num_doi, len(citations))})")
             logger.debug_msg(f"Found {num_title} citations by title ({percent(num_title, len(citations))})")
             logger.debug_msg(f"Failed to find {num_missing} citations ({percent(num_missing, len(citations))})")
+
+        return num_doi + num_title
 
     async def generate_openalex_query(self, nl_query: str) -> str:
         """

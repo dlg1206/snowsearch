@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Tuple
 
 from db.paper_database import PaperDatabase
 from grobid.worker import GrobidWorker
@@ -24,7 +24,7 @@ async def snowball(db: PaperDatabase,
                    nl_query: str = None,
                    papers_per_round: int = None,
                    seed_papers: List[str] = None,
-                   min_similarity_score: float = None) -> None:
+                   min_similarity_score: float = None) -> Tuple[int, int]:
     """
     Perform rounds of snowballing to search for reverent related papers
 
@@ -36,6 +36,7 @@ async def snowball(db: PaperDatabase,
     :param papers_per_round: Max number of papers to attempt to process per round (Default: All papers)
     :param seed_papers: List of paper titles to start snowballing with (Default: None)
     :param min_similarity_score: Minimum similarity score for snowball cutoff (Default: None)
+    :return: Number of new papers processed and citation metadata found successfully
     """
 
     def __get_papers_for_round() -> List[PaperDTO]:
@@ -56,6 +57,8 @@ async def snowball(db: PaperDatabase,
             return db.get_unprocessed_papers(papers_per_round)
 
     # perform n rounds of snowballing
+    processed_papers = 0
+    new_citations = 0
     for r in range(0, n_rounds):
         # get papers for round
         paper_dtos = db.get_papers(seed_papers) if seed_papers else __get_papers_for_round()
@@ -73,16 +76,19 @@ async def snowball(db: PaperDatabase,
         timer = Timer()
 
         # enrich papers
-        await grobid_worker.enrich_papers(db, paper_dtos)
+        processed_papers += await grobid_worker.enrich_papers(db, paper_dtos)
 
         # fetch metadata for new citations
         citations = []
         for p in paper_dtos:
             citations += db.get_citations(p.id, True)
-        await openalex_client.fetch_and_save_citation_metadata(db, citations)  # todo - config to skip title search
+        new_citations += await openalex_client.fetch_and_save_citation_metadata(db,
+                                                                                citations)  # todo - config to skip title search
 
         # Repeat
         logger.info(f"Snowball Round {r + 1} completed in {timer.format_time()}s")
+    # return stats
+    return processed_papers, new_citations
 
 
 async def run_snowball(db: PaperDatabase,
@@ -111,8 +117,15 @@ async def run_snowball(db: PaperDatabase,
         config.grobid.client_params
     )
 
-    await snowball(db, openalex_client, grobid_worker, config.snowball.rounds,
-                   nl_query=nl_query,
-                   papers_per_round=papers_per_round,
-                   seed_papers=seed_paper_titles,
-                   min_similarity_score=config.snowball.min_similarity_score)
+    # perform N rounds of snowballing
+    timer = Timer()
+    logger.info(f"Starting {config.snowball.rounds} rounds of snowballing")
+    processed_papers, new_citations = await snowball(db, openalex_client, grobid_worker, config.snowball.rounds,
+                                                     nl_query=nl_query,
+                                                     papers_per_round=papers_per_round,
+                                                     seed_papers=seed_paper_titles,
+                                                     min_similarity_score=config.snowball.min_similarity_score)
+    # log stats
+    logger.info(f"Snowballing complete in {timer.format_time()}s")
+    logger.info(f"Processed {processed_papers} new papers")
+    logger.info(f"Fetched details for {new_citations} new citations")

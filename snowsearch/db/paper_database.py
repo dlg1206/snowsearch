@@ -326,7 +326,7 @@ class PaperDatabase(Neo4jDatabase):
         :return: List of PaperDTOs
         """
         # build query
-        match_ids = [Node.create(NodeType.PAPER, {'id': t.strip()}).match_id for t in titles]
+        match_ids = [Node.create(NodeType.PAPER, {'id': t}).match_id for t in titles]
         query = f"""
         UNWIND $match_ids AS id
         MATCH (p:{NodeType.PAPER.value} {{match_id: id}})
