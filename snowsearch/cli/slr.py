@@ -6,10 +6,10 @@ from typing import List
 
 from ai.ollama import OllamaClient
 from ai.openai import OpenAIClient, OPENAI_API_KEY_ENV
+from cli.snowball import snowball
 from db.paper_database import PaperDatabase
 from grobid.worker import GrobidWorker
 from openalex.client import OpenAlexClient
-from openalex.dto import PaperDTO
 from rank.abstract_ranker import AbstractRanker
 from rank.dto import AbstractDTO
 from util.config_parser import Config
@@ -22,68 +22,6 @@ Description: Orchestrate entire strategic literature review pipeline
 
 @author Derek Garcia
 """
-
-
-async def _snowball(db: PaperDatabase,
-                    openalex_client: OpenAlexClient,
-                    grobid_worker: GrobidWorker,
-                    nl_query: str,
-                    n_rounds: int,
-                    papers_per_round: int,
-                    seed_papers: List[PaperDTO] = None,
-                    min_similarity_score: float = None) -> None:
-    """
-    Perform rounds of snowballing to search for reverent related papers
-
-    :param db: Databases to fetch details and save paper data to
-    :param openalex_client: Client to make requests to OpenAlex
-    :param grobid_worker: Client to make requests to Grobid server
-    :param nl_query: Natural langauge search query to match relevant papers
-    :param n_rounds: Number of rounds of snowballing to perform
-    :param papers_per_round: Max number of papers to process per round
-    :param seed_papers: List of papers to start snowballing with (Default: None)
-    :param min_similarity_score: Minimum similarity score for snowball cutoff (Default: None)
-    """
-
-    def __get_papers_for_round() -> List[PaperDTO]:
-        """
-        Util method to fetch relevant papers for the round
-        :return: List of papers
-        """
-        titles = [t for t, _, _ in
-                  db.search_papers_by_nl_query(nl_query,
-                                               True, True, paper_limit=papers_per_round,
-                                               min_score=min_similarity_score)]
-        return db.get_papers(titles) if titles else []
-
-    # perform n rounds of snowballing
-    for r in range(0, n_rounds):
-        # get papers for round
-        paper_dtos = db.get_papers([p.id for p in seed_papers]) if seed_papers else __get_papers_for_round()
-        if not paper_dtos:
-            # at least 1 round, exit early
-            if r:
-                logger.warn("Did not find more valid papers to continue snowballing; exiting early")
-                break
-            else:
-                # no rounds, error
-                # todo custom error
-                raise Exception("No papers to snowball with")
-
-        logger.info(f"Starting Snowball Round {r + 1} / {n_rounds}")
-        timer = Timer()
-
-        # enrich papers
-        await grobid_worker.enrich_papers(db, paper_dtos)
-
-        # fetch metadata for new citations
-        citations = []
-        for p in paper_dtos:
-            citations += db.get_citations(p.id, True)
-        await openalex_client.fetch_and_save_citation_metadata(db, citations)  # todo - config to skip title search
-
-        # Repeat
-        logger.info(f"Snowball Round {r + 1} completed in {timer.format_time()}s")
 
 
 def _format_results(db: PaperDatabase, original_search: str, ranked_abstracts: List[AbstractDTO]) -> None:
@@ -161,8 +99,10 @@ async def run_slr(db: PaperDatabase,
     # perform N rounds of snowballing
     timer = Timer()
     logger.info(f"Starting {config.snowball.rounds} rounds of snowballing")
-    await _snowball(db, openalex_client, grobid_worker, nl_query, config.snowball.rounds,
-                    config.snowball.papers_per_round, min_similarity_score=config.snowball.min_similarity_score)
+    await snowball(db, openalex_client, grobid_worker, config.snowball.rounds,
+                   nl_query=nl_query,
+                   papers_per_round=config.snowball.papers_per_round,
+                   min_similarity_score=config.snowball.min_similarity_score)
     logger.info(f"Snowballing complete in {timer.format_time()}s")
 
     # after snowballing, get top N papers that best match the prompt and rank them
