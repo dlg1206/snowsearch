@@ -54,7 +54,7 @@ async def _execute(db: PaperDatabase, args: Namespace) -> None:
         case 'search':
             run_search(db, args.semantic_search,
                        paper_limit=args.limit,
-                       # exact_match=args.exact_match,
+                       exact_match=args.exact_match,
                        only_open_access=args.only_open_access,
                        only_processed=args.only_processed,
                        min_similarity_score=args.min_similarity_score,

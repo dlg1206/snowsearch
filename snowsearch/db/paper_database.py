@@ -437,6 +437,46 @@ class PaperDatabase(Neo4jDatabase):
             results = session.run(query, **params)
             return [(r.get('id'), r.get('titleScore'), r.get('abstractScore')) for r in results]
 
+    def search_papers_by_title_match(self,
+                                  search_term: str,
+                                  only_open_access: bool = False,
+                                  require_abstract: bool = False,
+                                  paper_limit: int = None) -> List[PaperDTO]:
+        """
+        Get papers that best match the provided query, ranked in order of best title match then abstract
+        The similarity score can range from 1 (exact match) and -1 (complete opposite match)
+
+        :param search_term: Title keywords to attempt to match
+        :param only_open_access: Only get papers that have an 'open access' label
+        :param require_abstract: Require that paper has an abstract
+        :param paper_limit: Limit the max number of papers to return (Default: 100)
+        :raises ValueError: If provided min_score is outside [-1,1] range
+        :return: List of top_k papers ids ranked in order of best title match then abstract if available
+        """
+        # build where clause
+        conditions = [f"toLower(p.id) CONTAINS \"{search_term.lower()}\""]
+        if only_open_access:
+            conditions.append("p.is_open_access")
+        if require_abstract:
+            conditions.append("p.abstract_embedding")
+        where_clause = ""
+        if conditions:
+            where_clause = "WHERE " + " AND ".join(conditions)
+
+        query = f"""
+        MATCH (p:{NodeType.PAPER.value})
+        {where_clause}
+        RETURN p
+        {f' LIMIT {paper_limit}' if paper_limit else ''}
+        """
+        # exe query
+        with self._driver.session() as session:
+            papers = [r['p'] for r in list(session.run(query))]
+            # convert to dtos
+            return [PaperDTO.create_dto(p) for p in papers]
+
+
+
     def get_citations(self, source_title: str, unprocessed: bool = False) -> List[PaperDTO]:
         """
         Get citations for a given paper

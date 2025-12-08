@@ -115,14 +115,14 @@ def create_parser() -> ArgumentParser:
                         action="store_true",
                         help="Order by abstract similarity first")
 
-    # search_group = search.add_mutually_exclusive_group()
     search.add_argument('-m', '--min-similarity-score',
                         metavar="<score>",
                         type=float,
                         help="Score between -1 and 1 to be the minimum similarity match to filter for")
-    # search_group.add_argument('-e', '--exact-match',
-    #                           action="store_true",
-    #                           help="Title must contain the search query exactly (case insensitive)")
+
+    search.add_argument('-e', '--exact-match',
+                        action="store_true",
+                        help="Title must contain the search query exactly (case insensitive).")
 
     # logging flags
     logging = parser.add_argument_group("Logging")
