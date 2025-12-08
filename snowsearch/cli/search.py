@@ -4,7 +4,7 @@ from typing import List, Tuple
 from tabulate import tabulate
 
 from db.paper_database import PaperDatabase
-from openalex.dto import PaperDTO
+from dto.paper_dto import PaperDTO
 from util.logger import logger
 
 """

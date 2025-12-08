@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import List
 
-from openalex.dto import PaperDTO
+from dto.paper_dto import PaperDTO
 
 """
 File: dto.py

@@ -9,7 +9,7 @@ from sentence_transformers import SentenceTransformer
 from db.config import DEFAULT_EMBEDDING_MODEL, DEFAULT_DIMENSIONS, SENTENCE_TRANSFORMER_CACHE, DOI_PREFIX
 from db.database import Neo4jDatabase
 from db.entity import Node, NodeType, RelationshipType
-from openalex.dto import PaperDTO
+from dto.paper_dto import PaperDTO
 from util.logger import logger
 from util.timer import Timer
 

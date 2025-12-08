@@ -1,3 +1,4 @@
+import hashlib
 from dataclasses import dataclass, fields
 from datetime import datetime
 from typing import Dict
@@ -63,6 +64,14 @@ class PaperDTO:
                 line = "\t"
         # return results
         return abstract_text_formatted
+
+    def generate_short_uid(self) -> str:
+        """
+        Generate a short uid for use when ranking papers
+
+        :return: 5 character uuid
+        """
+        return hashlib.md5(self.id.encode("utf-8")).hexdigest()[:5]  # short temp uid to pass to the llm
 
     def __post_init__(self):
         if self.doi:

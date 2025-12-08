@@ -3,7 +3,7 @@ from typing import List, Tuple
 from db.paper_database import PaperDatabase
 from grobid.worker import GrobidWorker
 from openalex.client import OpenAlexClient
-from openalex.dto import PaperDTO
+from dto.paper_dto import PaperDTO
 from util.config_parser import Config
 from util.logger import logger
 from util.timer import Timer
