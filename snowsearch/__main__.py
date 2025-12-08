@@ -4,6 +4,7 @@ from argparse import Namespace
 
 from dotenv import load_dotenv
 
+from cli.inspect import run_inspect
 from cli.parser import create_parser
 from cli.search import run_search
 from cli.slr import run_slr
@@ -60,6 +61,10 @@ async def _execute(db: PaperDatabase, args: Namespace) -> None:
                        min_similarity_score=args.min_similarity_score,
                        order_by_abstract=args.order_by_abstract
                        )
+
+        case 'inspect':
+            run_inspect(db, args.paper_title)
+
 
 def main() -> None:
     """

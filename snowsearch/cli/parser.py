@@ -124,6 +124,13 @@ def create_parser() -> ArgumentParser:
                         action="store_true",
                         help="Title must contain the search query exactly (case insensitive).")
 
+    # inspect command - show details about a paper in the database
+    inspect = commands.add_parser('inspect', help="Get details about a paper")
+    inspect.add_argument('paper_title',
+                         metavar="<title-of-paper>",
+                         type=str,
+                         help="Print details of a given paper")
+
     # logging flags
     logging = parser.add_argument_group("Logging")
     logging.add_argument("-l", "--log-level",
