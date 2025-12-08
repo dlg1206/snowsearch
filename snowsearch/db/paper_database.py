@@ -365,7 +365,8 @@ class PaperDatabase(Neo4jDatabase):
                                   only_open_access: bool = False,
                                   require_abstract: bool = False,
                                   paper_limit: int = 100,
-                                  min_score: float = None) -> List[Tuple[str, float, float]]:
+                                  min_score: float = None,
+                                  order_by_abstract: bool = False) -> List[Tuple[str, float, float]]:
         """
         Get papers that best match the provided query, ranked in order of best title match then abstract
         The similarity score can range from 1 (exact match) and -1 (complete opposite match)
@@ -376,6 +377,7 @@ class PaperDatabase(Neo4jDatabase):
         :param require_abstract: Require that paper has an abstract
         :param paper_limit: Limit the max number of papers to return (Default: 100)
         :param min_score: Minimum similarity score of prompt to abstract, must be [-1,1] (Default: None but 0.4 recommended)
+        :param order_by_abstract: Return search order by abstract match then title match (Default: False)
         :raises ValueError: If provided min_score is outside [-1,1] range
         :return: List of top_k papers ids ranked in order of best title match then abstract if available
         """
@@ -423,7 +425,7 @@ class PaperDatabase(Neo4jDatabase):
           node.id      AS id,
           titleScore,
           abstractScore
-        ORDER BY titleScore DESC, abstractScore DESC
+        ORDER BY {'abstractScore DESC, titleScore DESC' if order_by_abstract else 'titleScore DESC, abstractScore DESC'}
         LIMIT $paper_limit
         """
         # set params

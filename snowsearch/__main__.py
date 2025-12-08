@@ -5,6 +5,7 @@ from argparse import Namespace
 from dotenv import load_dotenv
 
 from cli.parser import create_parser
+from cli.search import run_search
 from cli.slr import run_slr
 from cli.snowball import run_snowball
 from db.paper_database import PaperDatabase
@@ -45,8 +46,20 @@ async def _execute(db: PaperDatabase, args: Namespace) -> None:
             else:
                 seed_papers = args.seed_papers
             # start snowball
-            await run_snowball(db, config, args.semantic_search, papers_per_round, seed_papers)
+            await run_snowball(db, config,
+                               nl_query=args.semantic_search,
+                               papers_per_round=papers_per_round,
+                               seed_paper_titles=seed_papers)
 
+        case 'search':
+            run_search(db, args.semantic_search,
+                       paper_limit=args.limit,
+                       # exact_match=args.exact_match,
+                       only_open_access=args.only_open_access,
+                       only_processed=args.only_processed,
+                       min_similarity_score=args.min_similarity_score,
+                       order_by_abstract=args.order_by_abstract
+                       )
 
 def main() -> None:
     """

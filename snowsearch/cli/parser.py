@@ -79,17 +79,52 @@ def create_parser() -> ArgumentParser:
 
     snowball_group = snowball.add_mutually_exclusive_group()
     snowball_group.add_argument('-sp', '--seed-papers',
-                          metavar="<paper-title>",
-                          type=str,
-                          nargs="+",
-                          help="One or more paper titles to start snowballing with. i.e \"Graph Attention Networks\" \"GINE\"")
+                                metavar="<paper-title>",
+                                type=str,
+                                nargs="+",
+                                help="One or more paper titles to start snowballing with. i.e \"Graph Attention Networks\" \"GINE\"")
 
     snowball_group.add_argument('-i', '--seed-papers-input',
                                 metavar="<csv-file-path>",
                                 type=str,
                                 help="Path to csv file with list of paper titles to start snowballing with")
 
-# logging flags
+    # search command - search papers in the database
+    search = commands.add_parser('search',
+                                 help="Search the database for matching papers")
+
+    search.add_argument('semantic_search',
+                        metavar="<semantic-search>",
+                        type=str,
+                        help="Search terms for desired papers. i.e. \"AI-driven optimization of renewable energy systems\"")
+
+    search.add_argument('-l', '--limit',
+                        metavar="<limit>",
+                        type=int,
+                        help="Limit the number of papers to return (Default: 5)",
+                        default=5)
+
+    search.add_argument('--only-open-access',
+                        action="store_true",
+                        help="Only return papers that are publicly accessible")
+
+    search.add_argument('--only-processed',
+                        action="store_true",
+                        help="Only return papers that have been successfully processed with Grobid")
+    search.add_argument('--order-by-abstract',
+                        action="store_true",
+                        help="Order by abstract similarity first")
+
+    # search_group = search.add_mutually_exclusive_group()
+    search.add_argument('-m', '--min-similarity-score',
+                        metavar="<score>",
+                        type=float,
+                        help="Score between -1 and 1 to be the minimum similarity match to filter for")
+    # search_group.add_argument('-e', '--exact-match',
+    #                           action="store_true",
+    #                           help="Title must contain the search query exactly (case insensitive)")
+
+    # logging flags
     logging = parser.add_argument_group("Logging")
     logging.add_argument("-l", "--log-level",
                          metavar="<log level>",
