@@ -7,7 +7,7 @@ from db.config import DOI_PREFIX
 from openalex.config import DEFAULT_WRAP
 
 """
-File: dto.py
+File: grobid_dto.py
 Description: DTOs for OpenAlex
 
 @author Derek Garcia

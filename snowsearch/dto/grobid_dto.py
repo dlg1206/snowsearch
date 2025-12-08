@@ -4,7 +4,7 @@ from typing import List
 from dto.paper_dto import PaperDTO
 
 """
-File: dto.py
+File: grobid_dto.py
 Description: DTOs for Grobid
 
 @author Derek Garcia
