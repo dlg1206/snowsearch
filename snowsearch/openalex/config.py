@@ -24,3 +24,5 @@ MAX_RETRIES = 3
 
 OPENALEX_BASE = "https://api.openalex.org"
 OPENALEX_PREFIX = "https://openalex.org/"
+
+DEFAULT_WRAP = 100

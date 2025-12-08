@@ -39,14 +39,7 @@ def _format_results(db: PaperDatabase, original_search: str, ranked_abstracts: L
         print(f"\turl: {p_full.pdf_url}")
         print(f"==Abstract==")
         # pretty print abstract
-        abstract_text = p_full.abstract_text.split()
-        line = "\t"
-        while abstract_text:
-            line += f"{abstract_text.pop(0)} "
-            # print if exceed char limit or nothing left to add
-            if len(line) > 100 or not abstract_text:
-                print(line.strip())
-                line = "\t"
+        print(p_full.format_abstract())
         rank += 1
 
 
