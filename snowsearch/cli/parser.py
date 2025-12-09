@@ -131,6 +131,43 @@ def create_parser() -> ArgumentParser:
                          type=str,
                          help="Print details of a given paper")
 
+    # rank command - use llm to rank papers
+    rank = commands.add_parser('rank',
+                                   help="Rank papers that best match the provided search")
+
+    rank.add_argument('semantic_search',
+                          metavar="<semantic-search>",
+                          type=str,
+                          help="Descriptive, natural language match papers against i.e. \"AI-driven optimization of renewable energy systems\" "
+                               "Default will use all unprocessed papers with no order")
+
+    rank.add_argument('-l', '--limit',
+                        metavar="<limit>",
+                        type=int,
+                        help="Limit the number of papers to rank. (Default: Stored in config)")
+
+    rank.add_argument('-m', '--min-similarity-score',
+                        metavar="<score>",
+                        type=float,
+                        help="Score between -1 and 1 to be the minimum similarity match to filter for")
+
+    rank_group = rank.add_mutually_exclusive_group()
+    rank_group.add_argument('-p', '--paper-titles',
+                                metavar="<paper-titles>",
+                                type=str,
+                                nargs="+",
+                                help="One or more paper titles to rank. i.e \"Graph Attention Networks\" \"GINE\"")
+
+    rank_group.add_argument('-i', '--paper-titles-input',
+                                metavar="<csv-file-path>",
+                                type=str,
+                                help="Path to csv file with list of paper titles to rank")
+
+    rank_group.add_argument('-j', '--json',
+                           metavar="<json-file-path>",
+                           type=str,
+                           help="Save the results to json file instead of printing to stdout")
+
     # logging flags
     logging = parser.add_argument_group("Logging")
     logging.add_argument("-l", "--log-level",

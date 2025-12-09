@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 
 from cli.inspect import run_inspect
 from cli.parser import create_parser
+from cli.rank import run_rank
 from cli.search import run_search
 from cli.slr import run_slr
 from cli.snowball import run_snowball
@@ -36,7 +37,7 @@ async def _execute(db: PaperDatabase, args: Namespace) -> None:
             await run_slr(db, Config(args.config), args.semantic_search,
                           oa_query=args.query,
                           skip_paper_ranking=args.skip_ranking,
-                          json_output_path=args.json)
+                          json_output=args.json)
         case 'snowball':
             config = Config(args.config)
             papers_per_round = None if args.no_limit else config.snowball.papers_per_round
@@ -65,6 +66,20 @@ async def _execute(db: PaperDatabase, args: Namespace) -> None:
         case 'inspect':
             run_inspect(db, args.paper_title)
 
+        case 'rank':
+            config = Config(args.config)
+            if args.paper_titles_input:
+                with open(args.seed_papers_input, 'r') as f:
+                    reader = csv.reader(f)
+                    papers = [r[0] for r in reader]
+            else:
+                papers = args.paper_titles
+            await run_rank(db, config, args.semantic_search,
+                           paper_limit=args.limit,
+                           json_output=args.json,
+                           min_similarity_score=args.min_similarity_score,
+                           paper_titles_to_rank=papers
+                           )
 
 def main() -> None:
     """
