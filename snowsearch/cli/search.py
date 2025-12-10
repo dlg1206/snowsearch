@@ -67,8 +67,7 @@ def _print_similar_papers(db: PaperDatabase, paper_matches: List[Tuple[PaperDTO,
     print(tabulate(table, headers=headers, tablefmt='fancy_grid'))
 
 
-def run_search(db: PaperDatabase,
-               nl_query: str,
+def run_search(db: PaperDatabase, nl_query: str,
                paper_limit: int = None,
                exact_match: bool = False,
                only_open_access: bool = False,

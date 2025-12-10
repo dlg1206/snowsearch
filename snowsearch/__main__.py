@@ -74,17 +74,17 @@ async def _execute(db: PaperDatabase, args: Namespace) -> None:
             run_inspect(db, args.paper_title)
 
         case 'rank':
-            config = Config(args.config)
+            rank_config = Config(args.config).ranking
             # load args
             papers = None
             if args.papers_input or args.papers:
                 papers = __load_papers_from_csv(args.papers_input) if args.papers_input else list(set(args.papers))
 
             # start rank
-            await run_rank(db, config, args.semantic_search,
-                           paper_limit=args.limit,
+            await run_rank(db, rank_config, args.semantic_search,
+                           rank_config.top_n_papers if args.limit is None else args.limit,
+                           rank_config.min_abstract_score if args.min_similarity_score is None else args.min_similarity_score,
                            json_output=args.json,
-                           min_similarity_score=args.min_similarity_score,
                            paper_titles_to_rank=papers)
 
 

@@ -87,9 +87,14 @@ async def run_slr(db: PaperDatabase, config: Config, nl_query: str,
     await openalex_client.search_and_save_metadata(run_id, db, oa_query)
 
     # perform N rounds of snowballing
+    seed_papers = db.search_papers_by_nl_query(nl_query,
+                                               unprocessed=True,
+                                               only_open_access=True,
+                                               paper_limit=config.snowball.papers_per_round,
+                                               min_score=config.snowball.min_similarity_score)
     timer = Timer()
     logger.info(f"Starting {config.snowball.rounds} rounds of snowballing")
-    await snowball(db, openalex_client, grobid_worker, config.snowball.rounds,
+    await snowball(db, openalex_client, grobid_worker, config.snowball.rounds, seed_papers,
                    nl_query=nl_query,
                    papers_per_round=config.snowball.papers_per_round,
                    min_similarity_score=config.snowball.min_similarity_score)
@@ -108,6 +113,7 @@ async def run_slr(db: PaperDatabase, config: Config, nl_query: str,
 
     if not papers:
         raise Exception("No papers to rank")
+
     ranked_papers = await ranker.rank_paper_abstracts(nl_query, papers)
     if json_output:
         # format abstracts
