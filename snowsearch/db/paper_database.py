@@ -359,6 +359,74 @@ class PaperDatabase(Neo4jDatabase):
             # convert to dtos
             return [PaperDTO.create_dto(p) for p in papers]
 
+    def get_citations(self, source_title: str, unprocessed: bool = False) -> List[PaperDTO]:
+        """
+        Get citations for a given paper
+
+        :param source_title: Title of paper to get citations for
+        :param unprocessed: Only get unprocessed citations (Default: False)
+        :return: List of citations
+        """
+        query = f"""
+        MATCH (s:{NodeType.PAPER.value})-[:{RelationshipType.REFERENCES.value}]->(c:{NodeType.PAPER.value})
+        WHERE s.id = $source_title
+        {'AND c.download_status IS NULL AND c.openalex_status IS NULL' if unprocessed else ''}
+        RETURN c
+        """
+        # exe query
+        with self._driver.session() as session:
+            citations = [r['c'] for r in list(session.run(query, source_title=source_title))]
+            # convert to dtos
+            return [PaperDTO.create_dto(c) for c in citations]
+
+    def get_embedding_match_score(self, title: str, nl_query: str) -> Tuple[float, float] | None:
+        """
+        Get the embedding match score of a paper
+
+        :param title: Title of paper to search
+        :param nl_query: Natural language query to generate match score with
+        :return: Title and abstract score, None if paper not found
+        """
+        # init
+        node = Node.create(NodeType.PAPER, {'id': title})
+        nl_query_embedding = self._embedding_model.encode(nl_query, show_progress_bar=False).tolist()
+
+        query = f"""
+        CALL db.index.vector.queryNodes(
+          'paper_title_index',
+          $topK,
+          $embedding
+        ) YIELD node AS tnode, score AS titleScore
+
+        OPTIONAL CALL db.index.vector.queryNodes(
+          'paper_abstract_index',
+          $topK,
+          $embedding
+        ) YIELD node AS anode, score AS abstractScore
+        WHERE anode.id = tnode.id
+
+        WITH
+          tnode AS node,
+          titleScore,
+          abstractScore
+        WHERE node.match_id = $match_id 
+        RETURN
+          titleScore,
+          abstractScore
+        """
+
+        params = {
+            "topK": 100,
+            "embedding": nl_query_embedding,
+            "match_id": node.match_id,
+        }
+        # exe query
+        with self._driver.session() as session:
+            record = session.run(query, **params).single()
+            if record is None:
+                return None
+            return record["titleScore"], record["abstractScore"]
+
     def search_papers_by_nl_query(self, nl_query: str,
                                   unprocessed: bool = False,
                                   only_open_access: bool = False,
@@ -444,10 +512,10 @@ class PaperDatabase(Neo4jDatabase):
                 return [PaperDTO.create_dto(r["node"]) for r in results]
 
     def search_papers_by_title_match(self,
-                                  search_term: str,
-                                  only_open_access: bool = False,
-                                  require_abstract: bool = False,
-                                  paper_limit: int = None) -> List[PaperDTO]:
+                                     search_term: str,
+                                     only_open_access: bool = False,
+                                     require_abstract: bool = False,
+                                     paper_limit: int = None) -> List[PaperDTO]:
         """
         Get papers that best match the provided query, ranked in order of best title match then abstract
         The similarity score can range from 1 (exact match) and -1 (complete opposite match)
@@ -480,28 +548,6 @@ class PaperDatabase(Neo4jDatabase):
             papers = [r['p'] for r in list(session.run(query))]
             # convert to dtos
             return [PaperDTO.create_dto(p) for p in papers]
-
-
-
-    def get_citations(self, source_title: str, unprocessed: bool = False) -> List[PaperDTO]:
-        """
-        Get citations for a given paper
-
-        :param source_title: Title of paper to get citations for
-        :param unprocessed: Only get unprocessed citations (Default: False)
-        :return: List of citations
-        """
-        query = f"""
-        MATCH (s:{NodeType.PAPER.value})-[:{RelationshipType.REFERENCES.value}]->(c:{NodeType.PAPER.value})
-        WHERE s.id = $source_title
-        {'AND c.download_status IS NULL AND c.openalex_status IS NULL' if unprocessed else ''}
-        RETURN c
-        """
-        # exe query
-        with self._driver.session() as session:
-            citations = [r['c'] for r in list(session.run(query, source_title=source_title))]
-            # convert to dtos
-            return [PaperDTO.create_dto(c) for c in citations]
 
 
 def _is_model_local(embedding_model: str) -> bool:
