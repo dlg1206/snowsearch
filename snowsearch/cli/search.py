@@ -6,6 +6,7 @@ from tabulate import tabulate
 from db.paper_database import PaperDatabase
 from dto.paper_dto import PaperDTO
 from util.logger import logger
+from util.output import print_ranked_papers
 
 """
 File: search.py
@@ -88,20 +89,27 @@ def run_search(db: PaperDatabase, nl_query: str,
     """
     if exact_match:
         papers = db.search_papers_by_title_match(nl_query,
-                                                 require_abstract=only_processed,
                                                  # if abstract then processed by grobid
+                                                 require_abstract=only_processed,
                                                  only_open_access=only_open_access,
                                                  paper_limit=paper_limit)
         if not papers:
             logger.warn(f"Found no paper titles that contain the term '{nl_query}'")
-        _print_exact_papers(db, nl_query, papers)
+        # highlight matches
+        highlight = lambda m: f"{RED}{m.group(0)}{RESET}"
+        for p in papers:
+            p.id = re.sub(rf'{nl_query}', highlight, p.id, flags=re.IGNORECASE)
+        # print
+        print_ranked_papers(db, papers, include_abstract=True)
     else:
         papers = db.search_papers_by_nl_query(nl_query,
-                                              require_abstract=only_processed,  # if abstract then processed by grobid
+                                              # if abstract then processed by grobid
+                                              require_abstract=only_processed,
                                               only_open_access=only_open_access,
                                               paper_limit=paper_limit,
                                               min_score=min_similarity_score,
                                               order_by_abstract=order_by_abstract)
         if not papers:
             logger.warn(f"Found no paper titles that match the search within the search filters | '{nl_query}'")
-        _print_similar_papers(db, papers)
+        # print
+        print_ranked_papers(db, papers, include_abstract=True, nl_query=nl_query)

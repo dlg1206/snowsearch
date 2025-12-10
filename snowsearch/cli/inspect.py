@@ -1,7 +1,6 @@
-from tabulate import tabulate
-
 from db.paper_database import PaperDatabase
 from util.logger import logger
+from util.output import print_ranked_papers
 
 """
 File: inspect.py
@@ -26,7 +25,4 @@ def run_inspect(db: PaperDatabase, paper_title: str) -> None:
         return
 
     # print table
-    headers = ['Title', 'Abstract', 'DOI', 'URL', 'OpenAlex', 'Citations']
-    table = [[paper.id, paper.format_abstract(), paper.doi, paper.pdf_url, paper.openalex_url,
-              len(db.get_citations(paper.id))]]
-    print(tabulate(table, headers=headers, tablefmt='fancy_grid'))
+    print_ranked_papers(db, [paper], include_abstract=True)

@@ -1,7 +1,5 @@
-import json
 import os
 from dataclasses import asdict
-from datetime import datetime
 from typing import List
 
 from ai.ollama import OllamaClient
@@ -14,6 +12,7 @@ from grobid.worker import GrobidWorker
 from openalex.client import OpenAlexClient
 from util.config_parser import Config
 from util.logger import logger
+from util.output import write_ranked_papers_to_json, print_ranked_papers
 from util.timer import Timer
 
 """
@@ -22,22 +21,6 @@ Description: Orchestrate entire strategic literature review pipeline
 
 @author Derek Garcia
 """
-
-
-def _print_results(nl_query: str, ranked_papers: List[PaperDTO]) -> None:
-    """
-    Pretty print the ranked results
-
-    :param nl_query: Original search used to rank the abstracts
-    :param ranked_papers: List of ranked papers
-    """
-    print(f"\nOriginal search: {nl_query.strip()}")
-    for rank, paper in enumerate(ranked_papers, start=1):
-        print(f"\n\t{rank + 1}: '{paper.id}'")
-        print(f"\turl: {paper.pdf_url}")
-        print(f"==Abstract==")
-        # pretty print abstract
-        print(paper.format_abstract())
 
 
 async def run_slr(db: PaperDatabase, config: Config, nl_query: str,
@@ -111,23 +94,9 @@ async def run_slr(db: PaperDatabase, config: Config, nl_query: str,
     # rank and print output
     ranked_papers = await rank_papers(config.ranking, nl_query, papers)
     if json_output:
-        # format abstracts
-        results = {}
-        for rank, paper in enumerate(ranked_papers, start=1):
-            results[rank] = {
-                'title': paper.id,
-                'url': paper.pdf_url,
-                'abstract': paper.abstract_text
-            }
-        # write json
-        with open(json_output if json_output.endswith('.json') else f"{json_output}.json", 'w') as f:
-            data = {
-                'generated': datetime.now().isoformat(),
-                'original_search': nl_query,
-                'rankings': results
-            }
-            json.dump(data, f, indent=4)
+        model = f"{config.ranking.agent_config.model_name}:{config.ranking.agent_config.model_tag}"
+        json_output = write_ranked_papers_to_json(db, json_output, model, nl_query, ranked_papers)
         logger.info(f"Results saved to '{json_output}'")
     else:
         # pretty print results
-        _print_results(nl_query, ranked_papers)
+        print_ranked_papers(db, ranked_papers, include_abstract=True, nl_query=nl_query)
