@@ -30,15 +30,15 @@ def _print_results(nl_query: str, ranked_papers: List[PaperDTO]) -> None:
     :param ranked_papers: List of ranked papers
     """
     print(f"\nOriginal search: {nl_query.strip()}")
-    for rank, paper in enumerate(ranked_papers, start=1):
-        print(f"\n\t{rank}: '{paper.id}'")
+    for r, paper in enumerate(ranked_papers, start=1):
+        print(f"\n\t{r}: '{paper.id}'")
         print(f"\turl: {paper.pdf_url}")
         print(f"==Abstract==")
         # pretty print abstract
         print(paper.format_abstract())
 
 
-async def _rank(rank_config: RankingConfigDTO, nl_query: str, papers: List[PaperDTO]) -> List[PaperDTO]:
+async def rank_papers(rank_config: RankingConfigDTO, nl_query: str, papers: List[PaperDTO]) -> List[PaperDTO]:
     """
     Use an LLM to rank papers
 
@@ -91,7 +91,7 @@ async def run_rank(db: PaperDatabase, rank_config: RankingConfigDTO, nl_query: s
         raise Exception("No papers to rank")
 
     # rank and print results
-    ranked_papers = await _rank(rank_config, nl_query, papers_to_rank)
+    ranked_papers = await rank(rank_config, nl_query, papers_to_rank)
     if json_output:
         # format abstracts
         results = {}

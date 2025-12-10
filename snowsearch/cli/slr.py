@@ -6,12 +6,12 @@ from typing import List
 
 from ai.ollama import OllamaClient
 from ai.openai import OpenAIClient, OPENAI_API_KEY_ENV
+from cli.rank import rank_papers
 from cli.snowball import snowball
 from db.paper_database import PaperDatabase
 from dto.paper_dto import PaperDTO
 from grobid.worker import GrobidWorker
 from openalex.client import OpenAlexClient
-from rank.abstract_ranker import AbstractRanker
 from util.config_parser import Config
 from util.logger import logger
 from util.timer import Timer
@@ -58,12 +58,7 @@ async def run_slr(db: PaperDatabase, config: Config, nl_query: str,
     oa_query_model = OpenAIClient(config.query_generation.model_name) if os.getenv(
         OPENAI_API_KEY_ENV) else OllamaClient(**asdict(config.query_generation))
     openalex_client = OpenAlexClient(oa_query_model, config.openalex.email)
-    # init ranker client
-    abstract_model = OpenAIClient(config.ranking.agent_config.model_name) if os.getenv(
-        OPENAI_API_KEY_ENV) else OllamaClient(**asdict(config.ranking.agent_config))
-    ranker = AbstractRanker(abstract_model,
-                            config.ranking.context_window,
-                            config.ranking.tokens_per_word)
+
     # init grobid client
     grobid_worker = GrobidWorker(
         config.grobid.max_grobid_requests,
@@ -113,8 +108,8 @@ async def run_slr(db: PaperDatabase, config: Config, nl_query: str,
 
     if not papers:
         raise Exception("No papers to rank")
-
-    ranked_papers = await ranker.rank_paper_abstracts(nl_query, papers)
+    # rank and print output
+    ranked_papers = await rank_papers(config.ranking, nl_query, papers)
     if json_output:
         # format abstracts
         results = {}
