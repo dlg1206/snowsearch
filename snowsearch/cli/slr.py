@@ -8,9 +8,9 @@ from ai.ollama import OllamaClient
 from ai.openai import OpenAIClient, OPENAI_API_KEY_ENV
 from cli.snowball import snowball
 from db.paper_database import PaperDatabase
+from dto.paper_dto import PaperDTO
 from grobid.worker import GrobidWorker
 from openalex.client import OpenAlexClient
-from dto.paper_dto import PaperDTO
 from rank.abstract_ranker import AbstractRanker
 from util.config_parser import Config
 from util.logger import logger
@@ -40,9 +40,7 @@ def _print_results(nl_query: str, ranked_papers: List[PaperDTO]) -> None:
         print(paper.format_abstract())
 
 
-async def run_slr(db: PaperDatabase,
-                  config: Config,
-                  nl_query: str,
+async def run_slr(db: PaperDatabase, config: Config, nl_query: str,
                   oa_query: str = None,
                   skip_paper_ranking: bool = False,
                   json_output: str = None) -> None:
@@ -51,7 +49,7 @@ async def run_slr(db: PaperDatabase,
 
     :param db: Database to store paper results in
     :param config: Config details for performing the search
-    :param nl_query: Natural langauge search query to match papers to
+    :param nl_query: Natural language search query to match papers to
     :param oa_query: Elasticsearch-like query to use for search OpenAlex instead of generating one (Default: None)
     :param skip_paper_ranking: Skip ranking the most relevant papers using an LLM after snowballing (Default: False)
     :param json_output: Path to save results to instead of printing to stdout (Default: None)
@@ -103,13 +101,12 @@ async def run_slr(db: PaperDatabase,
         return
 
     # after snowballing, get top N papers that best match the prompt and rank them
-    ranking_seed_titles = [t for t, _, _ in
-                           db.search_papers_by_nl_query(nl_query,
-                                                        require_abstract=True,
-                                                        paper_limit=config.ranking.top_n_papers,
-                                                        min_score=config.ranking.min_abstract_score)]
-    papers = db.get_papers(ranking_seed_titles)
-    if not ranking_seed_titles:
+    papers = db.search_papers_by_nl_query(nl_query,
+                                          require_abstract=True,
+                                          paper_limit=config.ranking.top_n_papers,
+                                          min_score=config.ranking.min_abstract_score)
+
+    if not papers:
         raise Exception("No papers to rank")
     ranked_papers = await ranker.rank_paper_abstracts(nl_query, papers)
     if json_output:

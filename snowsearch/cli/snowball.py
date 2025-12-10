@@ -1,9 +1,9 @@
 from typing import List, Tuple
 
 from db.paper_database import PaperDatabase
+from dto.paper_dto import PaperDTO
 from grobid.worker import GrobidWorker
 from openalex.client import OpenAlexClient
-from dto.paper_dto import PaperDTO
 from util.config_parser import Config
 from util.logger import logger
 from util.timer import Timer
@@ -17,10 +17,7 @@ Description: Perform rounds of snowballing from the cli
 """
 
 
-async def snowball(db: PaperDatabase,
-                   openalex_client: OpenAlexClient,
-                   grobid_worker: GrobidWorker,
-                   n_rounds: int,
+async def snowball(db: PaperDatabase, openalex_client: OpenAlexClient, grobid_worker: GrobidWorker, n_rounds: int,
                    nl_query: str = None,
                    papers_per_round: int = None,
                    seed_papers: List[str] = None,
@@ -32,7 +29,7 @@ async def snowball(db: PaperDatabase,
     :param openalex_client: Client to make requests to OpenAlex
     :param grobid_worker: Client to make requests to Grobid server
     :param n_rounds: Number of rounds of snowballing to perform
-    :param nl_query: Natural langauge search query to match relevant papers (Default: None)
+    :param nl_query: Natural language search query to match relevant papers (Default: None)
     :param papers_per_round: Max number of papers to attempt to process per round (Default: All papers)
     :param seed_papers: List of paper titles to start snowballing with (Default: None)
     :param min_similarity_score: Minimum similarity score for snowball cutoff (Default: None)
@@ -46,12 +43,11 @@ async def snowball(db: PaperDatabase,
         """
         # sort by best match
         if nl_query:
-            matches = db.search_papers_by_nl_query(nl_query,
-                                                   True, True,
-                                                   paper_limit=papers_per_round,
-                                                   min_score=min_similarity_score)
-            titles = [t for t, _, _ in matches]
-            return db.get_papers(titles) if titles else []
+            return db.search_papers_by_nl_query(nl_query,
+                                                unprocessed=True,
+                                                only_open_access=True,
+                                                paper_limit=papers_per_round,
+                                                min_score=min_similarity_score)
         # else get unprocessed papers
         else:
             return db.get_unprocessed_papers(papers_per_round)
@@ -98,8 +94,7 @@ async def snowball(db: PaperDatabase,
     return processed_papers, new_citations
 
 
-async def run_snowball(db: PaperDatabase,
-                       config: Config,
+async def run_snowball(db: PaperDatabase, config: Config,
                        nl_query: str = None,
                        papers_per_round: int = None,
                        seed_paper_titles: List[str] = None) -> None:
@@ -108,7 +103,7 @@ async def run_snowball(db: PaperDatabase,
 
     :param db: Database to fetch details and save paper data to
     :param config: Config details for performing the search
-    :param nl_query: Natural langauge search query to match relevant papers (Default: None)
+    :param nl_query: Natural language search query to match relevant papers (Default: None)
     :param papers_per_round: Max number of papers to attempt to process per round (Default: All papers)
     :param seed_paper_titles: List of paper titles to start snowballing with (Default: None)
     """

@@ -67,7 +67,7 @@ async def run_rank(db: PaperDatabase, config: Config, nl_query: str,
 
     :param db: Database to store paper results in
     :param config: Config details for performing the search
-    :param nl_query: Natural langauge search query to match papers to
+    :param nl_query: Natural language search query to match papers to
     :param paper_limit: Max number of papers to rank that overrides the config (Default: None)
     :param json_output: Path to save results to instead of printing to stdout (Default: None)
     :param min_similarity_score: Minimum similarity score for filter cutoff (Default: None)
@@ -77,7 +77,7 @@ async def run_rank(db: PaperDatabase, config: Config, nl_query: str,
     if paper_titles_to_rank:
         paper_titles = paper_titles_to_rank
     else:
-        paper_titles = [t for t, _, _ in
+        paper_titles = [t.id for t, _, _ in
                         db.search_papers_by_nl_query(nl_query,
                                                      require_abstract=True,
                                                      paper_limit=paper_limit if paper_limit else config.ranking.top_n_papers,

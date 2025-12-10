@@ -359,14 +359,14 @@ class PaperDatabase(Neo4jDatabase):
             # convert to dtos
             return [PaperDTO.create_dto(p) for p in papers]
 
-    def search_papers_by_nl_query(self,
-                                  nl_query: str,
+    def search_papers_by_nl_query(self, nl_query: str,
                                   unprocessed: bool = False,
                                   only_open_access: bool = False,
                                   require_abstract: bool = False,
                                   paper_limit: int = 100,
                                   min_score: float = None,
-                                  order_by_abstract: bool = False) -> List[Tuple[str, float, float]]:
+                                  order_by_abstract: bool = False,
+                                  include_scores: bool = False) -> List[PaperDTO] | List[Tuple[PaperDTO, float, float]]:
         """
         Get papers that best match the provided query, ranked in order of best title match then abstract
         The similarity score can range from 1 (exact match) and -1 (complete opposite match)
@@ -378,6 +378,7 @@ class PaperDatabase(Neo4jDatabase):
         :param paper_limit: Limit the max number of papers to return (Default: 100)
         :param min_score: Minimum similarity score of prompt to abstract, must be [-1,1] (Default: None but 0.4 recommended)
         :param order_by_abstract: Return search order by abstract match then title match (Default: False)
+        :param include_scores: Include the match score of nl_query (Default: False)
         :raises ValueError: If provided min_score is outside [-1,1] range
         :return: List of top_k papers ids ranked in order of best title match then abstract if available
         """
@@ -422,7 +423,7 @@ class PaperDatabase(Neo4jDatabase):
           abstractScore
         {where_clause}
         RETURN
-          node.id      AS id,
+          node,
           titleScore,
           abstractScore
         ORDER BY {'abstractScore DESC, titleScore DESC' if order_by_abstract else 'titleScore DESC, abstractScore DESC'}
@@ -430,12 +431,17 @@ class PaperDatabase(Neo4jDatabase):
         """
         # set params
         # topK large to ensure capture enough data to filter and limit
-        params: Dict[str, Any] = {'topK': 100 * paper_limit, 'embedding': nl_query_embedding, 'minScore': min_score,
+        params: Dict[str, Any] = {'topK': 100 * paper_limit,
+                                  'embedding': nl_query_embedding,
+                                  'minScore': min_score,
                                   'paper_limit': paper_limit}
         # exe query
         with self._driver.session() as session:
             results = session.run(query, **params)
-            return [(r.get('id'), r.get('titleScore'), r.get('abstractScore')) for r in results]
+            if include_scores:
+                return [(PaperDTO.create_dto(r["node"]), r["titleScore"], r["abstractScore"]) for r in results]
+            else:
+                return [PaperDTO.create_dto(r["node"]) for r in results]
 
     def search_papers_by_title_match(self,
                                   search_term: str,

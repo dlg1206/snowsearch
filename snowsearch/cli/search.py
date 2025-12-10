@@ -42,7 +42,7 @@ def _print_exact_papers(db: PaperDatabase, search_term: str, paper_matches: List
     print(tabulate(table, headers=headers, tablefmt='fancy_grid'))
 
 
-def _print_similar_papers(db: PaperDatabase, paper_matches: List[Tuple[str, float, float]]) -> None:
+def _print_similar_papers(db: PaperDatabase, paper_matches: List[Tuple[PaperDTO, float, float]]) -> None:
     """
     Print matching papers to stdout
 
@@ -51,17 +51,16 @@ def _print_similar_papers(db: PaperDatabase, paper_matches: List[Tuple[str, floa
     """
     headers = ['#', 'Title', 'Title Match', 'Abstract Match', 'DOI', 'URL', 'OpenAlex', 'Citations']
     table = []
-    paper_map = {p.id: p for p in db.get_papers([t for t, _, _ in paper_matches])}
     for i, data in enumerate(paper_matches, start=1):
-        title, title_score, abstract_score = data
+        paper, title_score, abstract_score = data
         table.append([i,
-                      title,
+                      paper,
                       f"{100 * title_score:.01f}%",
                       f"{100 * abstract_score:.01f}%" if abstract_score else None,
-                      paper_map.get(title).doi,
-                      paper_map.get(title).pdf_url,
-                      paper_map.get(title).openalex_url,
-                      len(db.get_citations(title))
+                      paper.doi,
+                      paper.pdf_url,
+                      paper.openalex_url,
+                      len(db.get_citations(paper.id))
                       ])
 
     # output table
@@ -80,7 +79,7 @@ def run_search(db: PaperDatabase,
     Run a search in the neo4j database
 
     :param db: Database to fetch details and save paper data to
-    :param nl_query: Natural langauge search query to match relevant papers (Default: None)
+    :param nl_query: Natural language search query to match relevant papers (Default: None)
     :param paper_limit: Number of papers to display (Default: All)
     :param exact_match: Return papers that contain an exact, case-insensitive, match to the nl query (Default: False)
     :param only_open_access: Return papers that are open access (Default: False)
