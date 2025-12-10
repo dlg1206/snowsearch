@@ -64,8 +64,6 @@ async def run_rank(db: PaperDatabase, config: Config, nl_query: str,
                    paper_titles_to_rank: List[str] = None) -> None:
     """
     Use an LLM to rank papers based on their relevance to the query.
-    If papers are not provided, first find
-
 
     :param db: Database to store paper results in
     :param config: Config details for performing the search

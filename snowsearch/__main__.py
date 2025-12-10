@@ -1,6 +1,7 @@
 import asyncio
 import csv
 from argparse import Namespace
+from typing import List
 
 from dotenv import load_dotenv
 
@@ -31,6 +32,16 @@ async def _execute(db: PaperDatabase, args: Namespace) -> None:
     :param args: args to get command details from
     """
 
+    def __load_papers_from_csv(csv_path: str) -> List[str]:
+        """
+        Load a list of papers from a csv file
+
+        :param csv_path: Path to csv file with paper titles
+        :return: List of loaded titles
+        """
+        with open(csv_path, 'r') as f:
+            return list({r[0] for r in csv.reader(f)})
+
     match args.command:
         case 'slr':
             # todo - log if fail to connect to ollama / openai
@@ -40,18 +51,15 @@ async def _execute(db: PaperDatabase, args: Namespace) -> None:
                           json_output=args.json)
         case 'snowball':
             config = Config(args.config)
+            # load args
             papers_per_round = None if args.no_limit else config.snowball.papers_per_round
-            if args.seed_papers_input:
-                with open(args.seed_papers_input, 'r') as f:
-                    reader = csv.reader(f)
-                    seed_papers = [r[0] for r in reader]
-            else:
-                seed_papers = args.seed_papers
+            papers = __load_papers_from_csv(args.papers_input) if args.papers_input else list(set(args.papers))
+
             # start snowball
             await run_snowball(db, config,
                                nl_query=args.semantic_search,
                                papers_per_round=papers_per_round,
-                               seed_paper_titles=seed_papers)
+                               seed_paper_titles=papers)
 
         case 'search':
             run_search(db, args.semantic_search,
@@ -60,26 +68,25 @@ async def _execute(db: PaperDatabase, args: Namespace) -> None:
                        only_open_access=args.only_open_access,
                        only_processed=args.only_processed,
                        min_similarity_score=args.min_similarity_score,
-                       order_by_abstract=args.order_by_abstract
-                       )
+                       order_by_abstract=args.order_by_abstract)
 
         case 'inspect':
             run_inspect(db, args.paper_title)
 
         case 'rank':
             config = Config(args.config)
-            if args.paper_titles_input:
-                with open(args.seed_papers_input, 'r') as f:
-                    reader = csv.reader(f)
-                    papers = [r[0] for r in reader]
-            else:
-                papers = args.paper_titles
+            # load args
+            papers = None
+            if args.papers_input or args.papers:
+                papers = __load_papers_from_csv(args.papers_input) if args.papers_input else list(set(args.papers))
+
+            # start rank
             await run_rank(db, config, args.semantic_search,
                            paper_limit=args.limit,
                            json_output=args.json,
                            min_similarity_score=args.min_similarity_score,
-                           paper_titles_to_rank=papers
-                           )
+                           paper_titles_to_rank=papers)
+
 
 def main() -> None:
     """
