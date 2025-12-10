@@ -1,11 +1,13 @@
+import hashlib
 from dataclasses import dataclass, fields
 from datetime import datetime
 from typing import Dict
 
 from db.config import DOI_PREFIX
+from openalex.config import DEFAULT_WRAP
 
 """
-File: dto.py
+File: grobid_dto.py
 Description: DTOs for OpenAlex
 
 @author Derek Garcia
@@ -39,6 +41,37 @@ class PaperDTO:
         field_names = {f.name for f in fields(cls)}
         filtered_data = {k: v for k, v in data.items() if k in field_names}
         return cls(**filtered_data)
+
+    def format_abstract(self, wrap: int = DEFAULT_WRAP) -> str | None:
+        """
+        Format the abstract to fit within a wrap
+
+        :param wrap: Character limit to wrap at (Default: 100)
+        :return: Formatted abstract, None if no abstract to format
+        """
+        # no text to format
+        if not self.abstract_text:
+            return None
+        # format abstract
+        abstract_text = self.abstract_text.split()
+        line = "\t"
+        abstract_text_formatted = ""
+        while abstract_text:
+            line += f"{abstract_text.pop(0)} "
+            # print if exceed char limit or nothing left to add
+            if len(line) > wrap or not abstract_text:
+                abstract_text_formatted += f"{line.strip()}\n"
+                line = "\t"
+        # return results
+        return abstract_text_formatted
+
+    def generate_short_uid(self) -> str:
+        """
+        Generate a short uid for use when ranking papers
+
+        :return: 5 character uuid
+        """
+        return hashlib.md5(self.id.encode("utf-8")).hexdigest()[:5]  # short temp uid to pass to the llm
 
     def __post_init__(self):
         if self.doi:

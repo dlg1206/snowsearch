@@ -4,6 +4,7 @@ from asyncio import Semaphore
 from typing import List, Dict, Tuple, Any
 
 from aiohttp import ClientSession
+from tqdm.std import tqdm as TQDM
 from yarl import URL
 
 from ai.model import ModelClient
@@ -11,7 +12,7 @@ from db.config import DOI_PREFIX
 from db.paper_database import PaperDatabase
 from openalex.config import POLITE_RATE_LIMIT_SLEEP, DEFAULT_RATE_LIMIT_SLEEP, MAX_PER_PAGE, OPENALEX_BASE, \
     QUERY_JSON_RE, MAX_RETRIES, NL_TO_QUERY_CONTEXT_FILE, MAX_DOI_PER_PAGE
-from openalex.dto import PaperDTO
+from dto.paper_dto import PaperDTO
 from openalex.exception import MissingOpenAlexEntryError, ExceedMaxQueryGenerationAttemptsError
 from util.logger import logger
 
@@ -208,7 +209,6 @@ class OpenAlexClient:
                     rank_offset += len(papers)
                     if ranked_papers:
                         paper_db.insert_run_paper_batch(run_id, ranked_papers)
-                    # break
                     # no pages left
                     if not next_cursor:
                         break
@@ -217,19 +217,24 @@ class OpenAlexClient:
                     logger.error_exp(e)
                 finally:
                     # update progress
-                    if not isinstance(progress, int):
+                    if isinstance(progress, TQDM):
                         progress.update(MAX_PER_PAGE)
+
+        # close progress bar if using
+        if isinstance(progress, TQDM):
+            progress.close()
 
     async def fetch_and_save_citation_metadata(self,
                                                paper_db: PaperDatabase,
                                                citations: List[PaperDTO],
-                                               skip_title_search: bool = False) -> None:
+                                               skip_title_search: bool = False) -> int:
         """
         Fetch details for the given list of citations and save to database
 
         :param paper_db: Database to save papers to
         :param citations: List of citations to fetch details for
         :param skip_title_search: Optional skip title search (Default: False)
+        :return: Number of citations that the metadata was found
         """
         semaphore = Semaphore()  # semaphore so only 1 request at a time to prevent tripping rate limit
         num_doi = 0
@@ -250,16 +255,18 @@ class OpenAlexClient:
 
         async with ClientSession() as session:
             # pass 1 - fetch by DOI
-            doi_tasks = [_fetch_doi_batch_wrapper(semaphore, self._batch_fetch_by_doi(session, chunk))
-                         for chunk in doi_chunks]
-            for future in logger.get_data_queue(doi_tasks, "Fetching citation details by doi", "batch", is_async=True):
-                found_papers, missing_doi_ids = await future
-                num_doi += len(found_papers)
-                # save titles for second pass
-                titles += [doi_reverse_lookup.get(doi) for doi in missing_doi_ids]
-                # save rest if any
-                if found_papers:
-                    paper_db.insert_paper_batch(found_papers)
+            if doi_chunks:
+                doi_tasks = [_fetch_doi_batch_wrapper(semaphore, self._batch_fetch_by_doi(session, chunk))
+                             for chunk in doi_chunks]
+                for future in logger.get_data_queue(doi_tasks, "Fetching citation details by doi", "batch",
+                                                    is_async=True):
+                    found_papers, missing_doi_ids = await future
+                    num_doi += len(found_papers)
+                    # save titles for second pass
+                    titles += [doi_reverse_lookup.get(doi) for doi in missing_doi_ids]
+                    # save rest if any
+                    if found_papers:
+                        paper_db.insert_paper_batch(found_papers)
 
             # pass 2 - fetch by title
             if not skip_title_search:
@@ -289,6 +296,8 @@ class OpenAlexClient:
             logger.debug_msg(f"Found {num_doi} citations by DOI ({percent(num_doi, len(citations))})")
             logger.debug_msg(f"Found {num_title} citations by title ({percent(num_title, len(citations))})")
             logger.debug_msg(f"Failed to find {num_missing} citations ({percent(num_missing, len(citations))})")
+
+        return num_doi + num_title
 
     async def generate_openalex_query(self, nl_query: str) -> str:
         """

@@ -61,8 +61,7 @@ class Timer:
         """
         if end_timer:
             self.stop()
-        self._validate()
-        return format_time(self._end_time - self._start_time)
+        return format_time((self._end_time if self._end_time else time.time()) - self._start_time)
 
 
 def format_time(elapsed_seconds: float) -> str:

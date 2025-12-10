@@ -1,7 +1,7 @@
 # https://github.com/actions/starter-workflows/blob/main/ci/pylint.yml
 name: Pylint
 
-on: [push, pull_request]
+on: [ push, pull_request ]
 
 jobs:
   build:
@@ -15,11 +15,15 @@ jobs:
         uses: actions/setup-python@v3
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install dependencies
+
+      - name: Install pylint
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt && pip install pylint
+          pip install --upgrade pip
+          pip install pylint
+
       - name: Analyzing the code with pylint
         env:
           PYTHONPATH: "./snowsearch"
-        run: pylint --fail-under=6.0 snowsearch
+        # E0401 is import-error - ok since deps exceed CI size limit
+        # todo - fix and reinstall smaller deps
+        run: pylint --fail-under=6.0 --disable=E0401 snowsearch

@@ -12,9 +12,9 @@ from grobid_client.grobid_client import GrobidClient
 from db.paper_database import PaperDatabase
 from grobid.config import MAX_CONCURRENT_DOWNLOADS, MAX_PDF_COUNT, KILOBYTE, DOWNLOAD_HEADERS, PDF_MAGIC, \
     MAX_GROBID_REQUESTS
-from grobid.dto import GrobidDTO
+from dto.grobid_dto import GrobidDTO
 from grobid.exception import PaperDownloadError, GrobidProcessError, NoFileDataError, InvalidFileFormatError
-from openalex.dto import PaperDTO
+from dto.paper_dto import PaperDTO
 from util.logger import logger
 from util.timer import Timer
 
