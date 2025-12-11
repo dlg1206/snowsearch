@@ -88,7 +88,8 @@ async def snowball(db: PaperDatabase, openalex_client: OpenAlexClient, grobid_wo
             remaining_quota -= n_success
             # break if not retrying
             if ignore_quota:
-                logger.info("Lazy snowball -- ignoring round quota")
+                if remaining_quota:
+                    logger.info("Lazy snowball -- ignoring round quota")
                 break
             # quota met or (first round and seed provided)
             if remaining_quota <= 0 or (not r and seed_provided):

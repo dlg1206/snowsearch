@@ -51,6 +51,7 @@ async def run_slr(db: PaperDatabase, config: Config, nl_query: str,
     )
 
     # init run
+    db.load_embedding_model()   # preempt model load
     run_id = db.start_run()
 
     # generate query if none provided
