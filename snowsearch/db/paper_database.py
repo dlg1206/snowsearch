@@ -109,6 +109,15 @@ class PaperDatabase(Neo4jDatabase):
         self.insert_node(run_node)
         return new_run_id
 
+    def end_run(self, run_id: int) -> None:
+        """
+        End a run in the database
+
+        :param run_id: Run to end
+        """
+        run_node = Node.create(NodeType.RUN, {'id': run_id, 'end': datetime.now()})
+        self.insert_node(run_node, update=True)
+
     def insert_openalex_query(self, run_id: int, model: str | None, nl_query: str | None, oa_query: str) -> None:
         """
         Update a run with the openalex prompt and resulting query

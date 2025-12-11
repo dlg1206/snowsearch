@@ -82,6 +82,7 @@ async def run_slr(db: PaperDatabase, config: Config, nl_query: str,
     # exit early if not ranking
     if skip_paper_ranking:
         logger.warn("Skipping paper ranking")
+        db.end_run(run_id)
         return
 
     # after snowballing, get top N papers that best match the prompt and rank them
@@ -101,3 +102,6 @@ async def run_slr(db: PaperDatabase, config: Config, nl_query: str,
     else:
         # pretty print results
         print_ranked_papers(db, ranked_papers, include_abstract=True, nl_query=nl_query)
+
+    # end run
+    db.end_run(run_id)
