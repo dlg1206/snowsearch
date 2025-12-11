@@ -113,7 +113,6 @@ def main() -> None:
 
     with PaperDatabase() as db:
         try:
-            db.init()
             asyncio.run(_execute(db, args))
         except Exception as e:
             logger.fatal(e)

@@ -14,7 +14,6 @@ Description: Node construction and generation from yaml schema
 
 
 class NodeType(Enum):
-    DB_METADATA = "DB_Metadata"
     PAPER = "Paper"
     RUN = "Run"
 

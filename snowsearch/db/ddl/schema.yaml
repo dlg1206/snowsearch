@@ -1,9 +1,4 @@
 nodes:
-  # dummy node to check if db needs to be initialized
-  DB_Metadata:
-    properties:
-      - "initialized"
-
   # A metadata object for a full search run details
   Run:
     required_properties:

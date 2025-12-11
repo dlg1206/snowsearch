@@ -4,6 +4,7 @@ from dataclasses import asdict
 from datetime import datetime
 from typing import Dict, List, Tuple, Any
 
+from neo4j import GraphDatabase
 from sentence_transformers import SentenceTransformer
 
 from db.config import DEFAULT_EMBEDDING_MODEL, DEFAULT_DIMENSIONS, SENTENCE_TRANSFORMER_CACHE, DOI_PREFIX
@@ -34,7 +35,44 @@ class PaperDatabase(Neo4jDatabase):
         :param model_dimensions: Optional dimensions of embedding model. Must match the provided embedding model (Default: 384)
         """
         super().__init__()
+
+        # paperdb specific attributes
         self._model_dimensions = model_dimensions
+        self._embedding_model = None
+
+        # create embedding index for title and abstract
+        queries = [
+            f"""
+            CREATE VECTOR INDEX paper_title_index IF NOT EXISTS
+            FOR (p:{NodeType.PAPER.value}) ON (p.title_embedding)
+            OPTIONS {{
+              indexConfig: {{
+                `vector.dimensions`: {self._model_dimensions},
+                `vector.similarity_function`: 'cosine'
+              }}
+            }}
+            """,
+            f"""
+            CREATE VECTOR INDEX paper_abstract_index IF NOT EXISTS
+            FOR (p:{NodeType.PAPER.value}) ON (p.abstract_embedding)
+            OPTIONS {{
+              indexConfig: {{
+                `vector.dimensions`: {self._model_dimensions},
+                `vector.similarity_function`: 'cosine'
+              }}
+            }}
+            """
+        ]
+        # exec with tmp driver
+        username, password = os.getenv('NEO4J_AUTH').split('/', 1)
+        tmp_driver = GraphDatabase.driver(self._uri, auth=(username, password))
+        try:
+            with tmp_driver.session() as session:
+                for q in queries:
+                    session.run(q)
+        finally:
+            tmp_driver.close()
+
         # todo - add option in config?
         # use gpu if cuda available
         from torch.cuda import is_available
@@ -56,42 +94,6 @@ class PaperDatabase(Neo4jDatabase):
         if timer:
             logger.info(f"Downloaded '{embedding_model}' in {timer.format_time()}s")
 
-    def init(self) -> None:
-        """
-        Create additional embedding index on init
-        """
-        # regular init
-        super().init()
-        # create embedding index for title and abstract
-        queries = [
-            f"""
-            CREATE VECTOR INDEX paper_title_index IF NOT EXISTS
-            FOR (p:{NodeType.PAPER.value}) ON (p.title_embedding)
-            OPTIONS {{
-              indexConfig: {{
-                `vector.dimensions`: {self._model_dimensions},
-                `vector.similarity_function`: 'cosine'
-              }}
-            }}
-            """,
-
-            f"""
-            CREATE VECTOR INDEX paper_abstract_index IF NOT EXISTS
-            FOR (p:{NodeType.PAPER.value}) ON (p.abstract_embedding)
-            OPTIONS {{
-              indexConfig: {{
-                `vector.dimensions`: {self._model_dimensions},
-                `vector.similarity_function`: 'cosine'
-              }}
-            }}
-            """
-        ]
-        with self._driver.session() as session:
-            for q in queries:
-                session.run(q)
-
-        # record as initialized
-        self.insert_node(Node.create(NodeType.DB_METADATA, {'initialized': datetime.now()}))
 
     def start_run(self) -> int:
         """
