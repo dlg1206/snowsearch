@@ -28,16 +28,14 @@ https://docs.openalex.org/api-guide-for-llms
 
 
 class OpenAlexClient:
-    def __init__(self, model_client: ModelClient, email: str = None):
+    def __init__(self, email: str = None):
         """
         Create new OpenAlex client
 
         https://docs.openalex.org/how-to-use-the-api/rate-limits-and-authentication#the-polite-pool
 
-        :param model_client: Client to use for generating OpenAlex queries
         :param email: Optional email to add to the polite pool
         """
-        self._model_client = model_client
         self._email = email
         if not email:
             logger.warn("No email provided for OpenAlex - Using slower API")
@@ -304,13 +302,14 @@ class OpenAlexClient:
 
         return num_doi + num_title
 
-    async def generate_openalex_query(self, nl_query: str) -> str:
+    async def generate_openalex_query(self, model_client: ModelClient, nl_query: str) -> str:
         """
         Use an LLM to convert a natural language search query
         to an OpenAlex style search query based on Elasticsearch query
 
         https://docs.openalex.org/how-to-use-the-api/get-lists-of-entities/search-entities#boolean-searches
 
+        :param model_client: LLM to use to generate query
         :param nl_query: Natural language query for papers
         :raises ExceedMaxQueryGenerationAttemptsError: If fail to extract query from model reply
         :return: OpenAlex query string
@@ -319,7 +318,7 @@ class OpenAlexClient:
         # error if exceed retries
         for attempt in range(0, MAX_RETRIES):
             logger.info(f"Generating OpenAlex query ({attempt + 1}/{MAX_RETRIES}) | prompt: {nl_query.strip()}")
-            completion, timer = await self._model_client.prompt(
+            completion, timer = await model_client.prompt(
                 messages=[
                     {"role": "system", "content": self._nl_to_query_context},
                     {"role": "user", "content": f"\nNatural language prompt:\n{nl_query.strip()}"}

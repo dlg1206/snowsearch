@@ -132,8 +132,7 @@ async def run_snowball(db: PaperDatabase, config: Config,
     """
 
     # init OpenAlex client
-    openalex_client = OpenAlexClient(None, config.openalex.email)  # todo - make model optional
-
+    openalex_client = OpenAlexClient(config.openalex.email)
     # init grobid client
     grobid_worker = GrobidWorker(
         config.grobid.max_grobid_requests,

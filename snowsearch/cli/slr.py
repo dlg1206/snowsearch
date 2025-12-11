@@ -38,9 +38,7 @@ async def run_slr(db: PaperDatabase, config: Config, nl_query: str,
     :param ignore_quota: Skip fetching more papers to process if did not meet round quota round (Default: False)
     """
     # init OpenAlex client
-    oa_query_model = OpenAIClient(config.query_generation.model_name) if os.getenv(
-        OPENAI_API_KEY_ENV) else OllamaClient(**asdict(config.query_generation))
-    openalex_client = OpenAlexClient(oa_query_model, config.openalex.email)
+    openalex_client = OpenAlexClient(config.openalex.email)
 
     # init grobid client
     grobid_worker = GrobidWorker(
@@ -59,7 +57,9 @@ async def run_slr(db: PaperDatabase, config: Config, nl_query: str,
         logger.info(f"Using provided OpenAlex | {oa_query}")
         db.insert_openalex_query(run_id, None, nl_query, oa_query)
     else:
-        oa_query = await openalex_client.generate_openalex_query(nl_query)
+        oa_query_model = OpenAIClient(config.query_generation.model_name) \
+            if os.getenv(OPENAI_API_KEY_ENV) else OllamaClient(**asdict(config.query_generation))
+        oa_query = await openalex_client.generate_openalex_query(oa_query_model, nl_query)
         db.insert_openalex_query(run_id, openalex_client.model, nl_query, oa_query)
 
     # fetch openalex metadata from papers found by the query
