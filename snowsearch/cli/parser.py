@@ -75,23 +75,15 @@ def _add_paper_titles_input_flag_arg(command) -> None:
                          help="Path to csv file with list of paper titles to start with")
 
 
-def _add_limit_flag_arg(command, default: int = None) -> None:
+def _add_limit_flag_arg(command) -> None:
     """
     Add limit flag to command
 
-    :param command: Command to add arg to
-    :param default: Default limit (Default: None)
     """
-    params: Dict[str, Any] = {
-        'metavar': "<limit>",
-        'type': str,
-        'help': f"Limit the number of papers to return{f' (Default: {default})' if default else ''}"
-    }
-    # add default if given
-    if default is not None:
-        params['default'] = default
-
-    command.add_argument('-l', '--limit', **params)
+    command.add_argument('-l', '--limit',
+                         metavar="<limit>",
+                         type=int,
+                         help="Limit the number of papers to return")
 
 
 def _add_min_similarity_score_flag_arg(command) -> None:
@@ -183,7 +175,7 @@ def _add_search_command(root_command) -> None:
 
     # add generic args
     _add_semantic_search_arg(search)
-    _add_limit_flag_arg(search, 5)
+    _add_limit_flag_arg(search)
     _add_min_similarity_score_flag_arg(search)
 
     # add unique args
