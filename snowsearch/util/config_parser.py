@@ -83,7 +83,7 @@ class SnowballConfigDTO:
     rounds: int
     min_similarity_score: float
     seed_paper_limit: int = None
-    papers_per_round: int = None
+    round_quota: int = None
 
     def __post_init__(self):
         if self.rounds < 0:
@@ -95,7 +95,7 @@ class SnowballConfigDTO:
         if self.seed_paper_limit and self.seed_paper_limit < 1:
             raise ValueError("Seed round needs at least 1 paper")
 
-        if self.papers_per_round and self.papers_per_round < 1:
+        if self.round_quota and self.round_quota < 1:
             raise ValueError("Each snowball round needs at least 1 paper")
 
 
@@ -167,7 +167,7 @@ def _load_snowball_config(key: str, config: Dict[str, Any]) -> SnowballConfigDTO
     return SnowballConfigDTO(config['rounds'],
                              config['min_similarity_score'],
                              config.get('seed_paper_limit'),
-                             config.get('papers_per_round'))
+                             config.get('round_quota'))
 
 
 def _load_agent_config(key: str, config: Dict[str, Any]) -> AgentConfigDTO:

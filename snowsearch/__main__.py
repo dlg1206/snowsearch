@@ -53,7 +53,7 @@ async def _execute(db: PaperDatabase, args: Namespace) -> None:
         case 'snowball':
             config = Config(args.config)
             # load args
-            papers_per_round = None if args.no_limit else config.snowball.papers_per_round
+            round_quota = None if args.no_limit else config.snowball.round_quota
             papers = None
             # load titles if provided
             if args.papers_input:
@@ -64,7 +64,7 @@ async def _execute(db: PaperDatabase, args: Namespace) -> None:
             # start snowball
             await run_snowball(db, config,
                                nl_query=args.semantic_search,
-                               round_quota=papers_per_round,
+                               round_quota=round_quota,
                                seed_paper_titles=papers,
                                ignore_quota=args.ignore_quota)
 

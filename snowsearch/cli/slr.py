@@ -68,13 +68,13 @@ async def run_slr(db: PaperDatabase, config: Config, nl_query: str,
     seed_papers = db.search_papers_by_nl_query(nl_query,
                                                unprocessed=True,
                                                only_open_access=True,
-                                               paper_limit=config.snowball.papers_per_round,
+                                               paper_limit=config.snowball.round_quota,
                                                min_score=config.snowball.min_similarity_score)
     timer = Timer()
     logger.info(f"Starting {config.snowball.rounds} rounds of snowballing")
     await snowball(db, openalex_client, grobid_worker, config.snowball.rounds, seed_papers,
                    nl_query=nl_query,
-                   round_quota=config.snowball.papers_per_round,
+                   round_quota=config.snowball.round_quota,
                    min_similarity_score=config.snowball.min_similarity_score,
                    ignore_quota=ignore_quota)
     logger.info(f"Snowballing complete in {timer.format_time()}s")
