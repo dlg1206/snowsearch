@@ -10,11 +10,11 @@ from aiohttp import ClientSession, ClientResponseError
 from grobid_client.grobid_client import GrobidClient
 
 from db.paper_database import PaperDatabase
+from dto.grobid_dto import GrobidDTO
+from dto.paper_dto import PaperDTO
 from grobid.config import MAX_CONCURRENT_DOWNLOADS, MAX_PDF_COUNT, KILOBYTE, DOWNLOAD_HEADERS, PDF_MAGIC, \
     MAX_GROBID_REQUESTS
-from dto.grobid_dto import GrobidDTO
 from grobid.exception import PaperDownloadError, GrobidProcessError, NoFileDataError, InvalidFileFormatError
-from dto.paper_dto import PaperDTO
 from util.logger import logger
 from util.timer import Timer
 
@@ -91,7 +91,7 @@ class GrobidWorker:
             except ClientResponseError as e:
                 raise PaperDownloadError(title, e.status, e.message, pdf_url) from e
             except Exception as e:
-                raise PaperDownloadError(title, 500, str(e), pdf_url ) from e
+                raise PaperDownloadError(title, 500, str(e), pdf_url) from e
 
         logger.debug_msg(f"Saved '{output_path}' in {timer.format_time()}s | {pdf_url}")
 
@@ -206,7 +206,7 @@ class GrobidWorker:
         if len(papers):
             percent = lambda a, b: f"{(a / b) * 100:.01f}%"
             logger.info(
-                f"Processing complete, successfully download and processed {num_success} papers ({percent(num_success, len(papers))})")
+                f"Processing complete, successfully downloaded and processed {num_success} papers ({percent(num_success, len(papers))})")
             logger.debug_msg(f"Found {len(unique_citations)} citations")
             logger.debug_msg(
                 f"Failed to download {num_fail_download} papers ({percent(num_fail_download, len(papers))})")

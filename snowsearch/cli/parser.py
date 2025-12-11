@@ -106,6 +106,17 @@ def _add_min_similarity_score_flag_arg(command) -> None:
                          help="Score between -1 and 1 to be the minimum similarity match to filter for")
 
 
+def _add_ignore_quota_process_flag_arg(command) -> None:
+    """
+    Add ignore_quota flag to command
+
+    :param command: Command to add arg to
+    """
+    command.add_argument('--ignore-quota',
+                         action="store_true",
+                         help="Do not retry to process additional papers to meet the round paper quota")
+
+
 #
 # Commands
 #
@@ -121,6 +132,7 @@ def _add_slr_command(root_command) -> None:
                                        "rounds of snowballing, and final abstract LLM ranking.")
     # add generic args
     _add_semantic_search_arg(slr)
+    _add_ignore_quota_process_flag_arg(slr)
 
     # add unique args
     slr.add_argument('-q', '--query',
@@ -149,6 +161,7 @@ def _add_snowball_command(root_command) -> None:
                                             "without the initial OpenAlex search or LLM ranking")
     # add generic args
     _add_semantic_search_arg(snowball, False)
+    _add_ignore_quota_process_flag_arg(snowball)
 
     # add unique args
     snowball.add_argument('--no-limit',

@@ -1,13 +1,11 @@
 import os
 from dataclasses import asdict
-from typing import List
 
 from ai.ollama import OllamaClient
 from ai.openai import OpenAIClient, OPENAI_API_KEY_ENV
 from cli.rank import rank_papers
 from cli.snowball import snowball
 from db.paper_database import PaperDatabase
-from dto.paper_dto import PaperDTO
 from grobid.worker import GrobidWorker
 from openalex.client import OpenAlexClient
 from util.config_parser import Config
@@ -26,7 +24,8 @@ Description: Orchestrate entire strategic literature review pipeline
 async def run_slr(db: PaperDatabase, config: Config, nl_query: str,
                   oa_query: str = None,
                   skip_paper_ranking: bool = False,
-                  json_output: str = None) -> None:
+                  json_output: str = None,
+                  ignore_quota: bool = False) -> None:
     """
     Perform a full literature search
 
@@ -36,6 +35,7 @@ async def run_slr(db: PaperDatabase, config: Config, nl_query: str,
     :param oa_query: Elasticsearch-like query to use for search OpenAlex instead of generating one (Default: None)
     :param skip_paper_ranking: Skip ranking the most relevant papers using an LLM after snowballing (Default: False)
     :param json_output: Path to save results to instead of printing to stdout (Default: None)
+    :param ignore_quota: Skip fetching more papers to process if did not meet round quota round (Default: False)
     """
     # init OpenAlex client
     oa_query_model = OpenAIClient(config.query_generation.model_name) if os.getenv(
@@ -74,8 +74,9 @@ async def run_slr(db: PaperDatabase, config: Config, nl_query: str,
     logger.info(f"Starting {config.snowball.rounds} rounds of snowballing")
     await snowball(db, openalex_client, grobid_worker, config.snowball.rounds, seed_papers,
                    nl_query=nl_query,
-                   papers_per_round=config.snowball.papers_per_round,
-                   min_similarity_score=config.snowball.min_similarity_score)
+                   round_quota=config.snowball.papers_per_round,
+                   min_similarity_score=config.snowball.min_similarity_score,
+                   ignore_quota=ignore_quota)
     logger.info(f"Snowballing complete in {timer.format_time()}s")
 
     # exit early if not ranking
