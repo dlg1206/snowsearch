@@ -110,10 +110,12 @@ class OpenAlexClient:
         # parse findings
         return result['meta']['next_cursor'], [
             PaperDTO(p.get('title', f"MISSING_TITLE_{hashlib.md5(p['id'].encode("utf-8")).hexdigest()[:5]}"),
+                     publication_year=p['publication_year'],
+                     publication_date=p['publication_date'],
                      openalex_url=p['id'],
                      doi=p['doi'],
                      is_open_access=bool(p['open_access']['is_oa']),
-                     pdf_url=p['primary_location']['oa_url'])
+                     pdf_url=p['primary_location']['pdf_url'])
             for p in result.get('results', [])
         ]
 

@@ -24,6 +24,8 @@ nodes:
     required_properties:
       - "id"
     properties:
+      - "publication_year"
+      - "publication_date"
       - "openalex_url"
       - "doi"
       - "title_embedding"

@@ -1,6 +1,6 @@
 import hashlib
 from dataclasses import dataclass, fields
-from datetime import datetime
+from datetime import datetime, date
 from typing import Dict
 
 from db.config import DOI_PREFIX
@@ -17,6 +17,8 @@ Description: DTOs for OpenAlex
 @dataclass
 class PaperDTO:
     id: str
+    publication_year: int = None
+    publication_date: date = None
     openalex_url: str = None
     doi: str = None
     abstract_text: str = None
