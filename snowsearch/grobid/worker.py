@@ -90,6 +90,8 @@ class GrobidWorker:
                             f.write(chunk)
             except ClientResponseError as e:
                 raise PaperDownloadError(title, e.status, e.message, pdf_url) from e
+            except Exception as e:
+                raise PaperDownloadError(title, 500, str(e), pdf_url ) from e
 
         logger.debug_msg(f"Saved '{output_path}' in {timer.format_time()}s | {pdf_url}")
 
