@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import os
 from asyncio import Semaphore
 from typing import List, Dict, Tuple, Any
@@ -108,11 +109,11 @@ class OpenAlexClient:
 
         # parse findings
         return result['meta']['next_cursor'], [
-            PaperDTO(p['title'],
+            PaperDTO(p.get('title', f"MISSING_TITLE_{hashlib.md5(p['id'].encode("utf-8")).hexdigest()[:5]}"),
                      openalex_url=p['id'],
                      doi=p['doi'],
                      is_open_access=bool(p['open_access']['is_oa']),
-                     pdf_url=p['open_access']['oa_url'])
+                     pdf_url=p['primary_location']['oa_url'])
             for p in result.get('results', [])
         ]
 
@@ -200,6 +201,7 @@ class OpenAlexClient:
             # fetch all papers
             next_cursor = "*"
             rank_offset = 0
+            update_chunk = 0
             while True:
                 try:
                     # save results
@@ -207,6 +209,7 @@ class OpenAlexClient:
                     next_cursor, papers = await self._fetch_page(session, oa_query, next_cursor)
                     ranked_papers = [(papers[i], i + rank_offset) for i in range(0, len(papers))]
                     rank_offset += len(papers)
+                    update_chunk = len(papers)
                     if ranked_papers:
                         paper_db.insert_run_paper_batch(run_id, ranked_papers)
                     # no pages left
@@ -218,7 +221,7 @@ class OpenAlexClient:
                 finally:
                     # update progress
                     if isinstance(progress, TQDM):
-                        progress.update(MAX_PER_PAGE)
+                        progress.update(update_chunk)
 
         # close progress bar if using
         if isinstance(progress, TQDM):
@@ -269,9 +272,9 @@ class OpenAlexClient:
                         paper_db.insert_paper_batch(found_papers)
 
             # pass 2 - fetch by title
-            if not skip_title_search:
-                title_tasks = [_fetch_title_wrapper(semaphore, c, self._fetch_by_exact_title(session, c.id)) for c in
-                               titles]
+            if not skip_title_search and titles:
+                title_tasks = [_fetch_title_wrapper(semaphore, c, self._fetch_by_exact_title(session, c.id))
+                               for c in titles]
                 for future in logger.get_data_queue(title_tasks, "Fetching citation details by title", "citation",
                                                     is_async=True):
                     try:
