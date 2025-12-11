@@ -9,9 +9,9 @@ snowball:
   # REQUIRED
   rounds: 3
 
-  # For each round, the upper limit of the number of papers to snowball (fetch citation details for)
+  # For each round, the number of papers to snowball (fetch citation details for)
   # Leave blank for no upper limit
-  papers_per_round: 3
+  round_quota: 5
 
   # Minimum similarity score between the natural language query and title / abstract.
   # Must be [-1,1], but 0.4 is recommended.

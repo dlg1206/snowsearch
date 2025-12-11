@@ -4,7 +4,7 @@ from dataclasses import asdict
 from datetime import datetime
 from typing import Dict, List, Tuple, Any
 
-from sentence_transformers import SentenceTransformer
+from neo4j import GraphDatabase
 
 from db.config import DEFAULT_EMBEDDING_MODEL, DEFAULT_DIMENSIONS, SENTENCE_TRANSFORMER_CACHE, DOI_PREFIX
 from db.database import Neo4jDatabase
@@ -26,42 +26,20 @@ warnings.filterwarnings("ignore", message=".*CUDA initialization.*")
 
 
 class PaperDatabase(Neo4jDatabase):
-    def __init__(self, embedding_model: str = DEFAULT_EMBEDDING_MODEL, model_dimensions: int = DEFAULT_DIMENSIONS):
+    def __init__(self, embedding_model_name: str = DEFAULT_EMBEDDING_MODEL, model_dimensions: int = DEFAULT_DIMENSIONS):
         """
         Create new instance of the interface
 
-        :param embedding_model: Optional embedding model to use (Default: all-MiniLM-L6-v2)
+        :param embedding_model_name: Optional embedding model to use (Default: all-MiniLM-L6-v2)
         :param model_dimensions: Optional dimensions of embedding model. Must match the provided embedding model (Default: 384)
         """
         super().__init__()
+
+        # paperdb specific attributes
         self._model_dimensions = model_dimensions
-        # todo - add option in config?
-        # use gpu if cuda available
-        from torch.cuda import is_available
-        if is_available():
-            device = "cuda"
-            logger.debug_msg("Embedding model utilizing gpu")
-        else:
-            device = "cpu"
-            logger.warn("Using cpu to create embeddings -- this may impact performance")
+        self._embedding_model_name = embedding_model_name
+        self._embedding_model = None
 
-        # download embedding model if needed
-        model_downloaded = _is_model_local(embedding_model)
-        timer = None
-        if not model_downloaded:
-            logger.warn(f"Embedding model '{embedding_model}' not downloaded locally, downloading now")
-            timer = Timer()
-
-        self._embedding_model = SentenceTransformer(embedding_model, device=device)
-        if timer:
-            logger.info(f"Downloaded '{embedding_model}' in {timer.format_time()}s")
-
-    def init(self) -> None:
-        """
-        Create additional embedding index on init
-        """
-        # regular init
-        super().init()
         # create embedding index for title and abstract
         queries = [
             f"""
@@ -74,7 +52,6 @@ class PaperDatabase(Neo4jDatabase):
               }}
             }}
             """,
-
             f"""
             CREATE VECTOR INDEX paper_abstract_index IF NOT EXISTS
             FOR (p:{NodeType.PAPER.value}) ON (p.abstract_embedding)
@@ -86,12 +63,44 @@ class PaperDatabase(Neo4jDatabase):
             }}
             """
         ]
-        with self._driver.session() as session:
-            for q in queries:
-                session.run(q)
+        # exec with tmp driver
+        username, password = os.getenv('NEO4J_AUTH').split('/', 1)
+        tmp_driver = GraphDatabase.driver(self._uri, auth=(username, password))
+        try:
+            with tmp_driver.session() as session:
+                for q in queries:
+                    session.run(q)
+        finally:
+            tmp_driver.close()
 
-        # record as initialized
-        self.insert_node(Node.create(NodeType.DB_METADATA, {'initialized': datetime.now()}))
+    def load_embedding_model(self) -> None:
+        """
+        Load embedding model into memory
+        """
+        # don't reload if already loaded
+        if self._embedding_model:
+            return
+
+        # use gpu if cuda available
+        from torch.cuda import is_available
+        if is_available():
+            device = "cuda"
+            logger.debug_msg("Embedding model utilizing gpu")
+        else:
+            device = "cpu"
+            logger.warn("Using cpu to create embeddings -- this may impact performance")
+
+        # download embedding model if needed
+        model_downloaded = _is_model_local(self._embedding_model_name)
+        timer = None
+        if not model_downloaded:
+            logger.warn(f"Embedding model '{self._embedding_model_name}' not downloaded locally, downloading now")
+            timer = Timer()
+        from sentence_transformers import SentenceTransformer   # lazy load
+        self._embedding_model = SentenceTransformer(self._embedding_model_name, device=device)
+        if timer:
+            logger.info(f"Downloaded '{self._embedding_model_name}' in {timer.format_time()}s")
+
 
     def start_run(self) -> int:
         """
@@ -108,6 +117,15 @@ class PaperDatabase(Neo4jDatabase):
         run_node = Node.create(NodeType.RUN, {'id': new_run_id, 'start': datetime.now()})
         self.insert_node(run_node)
         return new_run_id
+
+    def end_run(self, run_id: int) -> None:
+        """
+        End a run in the database
+
+        :param run_id: Run to end
+        """
+        run_node = Node.create(NodeType.RUN, {'id': run_id, 'end': datetime.now()})
+        self.insert_node(run_node, update=True)
 
     def insert_openalex_query(self, run_id: int, model: str | None, nl_query: str | None, oa_query: str) -> None:
         """
@@ -136,6 +154,9 @@ class PaperDatabase(Neo4jDatabase):
         :param paper: DTO with paper details
         :param run_id: Optional ID of run (Default: None)
         """
+        # lazy load embedding model
+        self.load_embedding_model()
+
         # add properties
         properties = asdict(paper)
 
@@ -204,6 +225,8 @@ class PaperDatabase(Neo4jDatabase):
         """
         Fetch all papers that are missing title embeddings and calculate and set value
         """
+        # lazy load embedding model
+        self.load_embedding_model()
 
         missing_title_embeddings_query = f"""
         MATCH (p:{NodeType.PAPER.value})
@@ -387,6 +410,9 @@ class PaperDatabase(Neo4jDatabase):
         :param nl_query: Natural language query to generate match score with
         :return: Title and abstract score, None if paper not found
         """
+        # lazy load embedding model
+        self.load_embedding_model()
+
         # init
         node = Node.create(NodeType.PAPER, {'id': title})
         nl_query_embedding = self._embedding_model.encode(nl_query, show_progress_bar=False).tolist()
@@ -453,6 +479,9 @@ class PaperDatabase(Neo4jDatabase):
         # validate min score
         if min_score and (min_score > 1 or min_score < -1):
             raise ValueError("Param 'min_score' must be between -1 and 1")
+
+        # lazy load embedding model
+        self.load_embedding_model()
 
         nl_query_embedding = self._embedding_model.encode(nl_query, show_progress_bar=False).tolist()
 

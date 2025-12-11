@@ -48,18 +48,25 @@ async def _execute(db: PaperDatabase, args: Namespace) -> None:
             await run_slr(db, Config(args.config), args.semantic_search,
                           oa_query=args.query,
                           skip_paper_ranking=args.skip_ranking,
-                          json_output=args.json)
+                          json_output=args.json,
+                          ignore_quota=args.ignore_quota)
         case 'snowball':
             config = Config(args.config)
             # load args
-            papers_per_round = None if args.no_limit else config.snowball.papers_per_round
-            papers = __load_papers_from_csv(args.papers_input) if args.papers_input else list(set(args.papers))
+            round_quota = None if args.no_limit else config.snowball.round_quota
+            papers = None
+            # load titles if provided
+            if args.papers_input:
+                papers = __load_papers_from_csv(args.papers_input)
+            if args.papers:
+                papers = list(set(args.papers))
 
             # start snowball
             await run_snowball(db, config,
                                nl_query=args.semantic_search,
-                               papers_per_round=papers_per_round,
-                               seed_paper_titles=papers)
+                               round_quota=round_quota,
+                               seed_paper_titles=papers,
+                               ignore_quota=args.ignore_quota)
 
         case 'search':
             run_search(db, args.semantic_search,
@@ -77,8 +84,11 @@ async def _execute(db: PaperDatabase, args: Namespace) -> None:
             rank_config = Config(args.config).ranking
             # load args
             papers = None
-            if args.papers_input or args.papers:
-                papers = __load_papers_from_csv(args.papers_input) if args.papers_input else list(set(args.papers))
+            # load titles if provided
+            if args.papers_input:
+                papers = __load_papers_from_csv(args.papers_input)
+            if args.papers:
+                papers = list(set(args.papers))
 
             # start rank
             await run_rank(db, rank_config, args.semantic_search,
@@ -103,7 +113,6 @@ def main() -> None:
 
     with PaperDatabase() as db:
         try:
-            db.init()
             asyncio.run(_execute(db, args))
         except Exception as e:
             logger.fatal(e)

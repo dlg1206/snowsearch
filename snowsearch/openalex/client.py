@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import os
 from asyncio import Semaphore
 from typing import List, Dict, Tuple, Any
@@ -27,16 +28,14 @@ https://docs.openalex.org/api-guide-for-llms
 
 
 class OpenAlexClient:
-    def __init__(self, model_client: ModelClient, email: str = None):
+    def __init__(self, email: str = None):
         """
         Create new OpenAlex client
 
         https://docs.openalex.org/how-to-use-the-api/rate-limits-and-authentication#the-polite-pool
 
-        :param model_client: Client to use for generating OpenAlex queries
         :param email: Optional email to add to the polite pool
         """
-        self._model_client = model_client
         self._email = email
         if not email:
             logger.warn("No email provided for OpenAlex - Using slower API")
@@ -108,11 +107,13 @@ class OpenAlexClient:
 
         # parse findings
         return result['meta']['next_cursor'], [
-            PaperDTO(p['title'],
+            PaperDTO(p.get('title', f"MISSING_TITLE_{hashlib.md5(p['id'].encode("utf-8")).hexdigest()[:5]}"),
+                     publication_year=p['publication_year'],
+                     publication_date=p['publication_date'],
                      openalex_url=p['id'],
                      doi=p['doi'],
                      is_open_access=bool(p['open_access']['is_oa']),
-                     pdf_url=p['open_access']['oa_url'])
+                     pdf_url=p['primary_location']['pdf_url'])
             for p in result.get('results', [])
         ]
 
@@ -200,6 +201,7 @@ class OpenAlexClient:
             # fetch all papers
             next_cursor = "*"
             rank_offset = 0
+            update_chunk = 0
             while True:
                 try:
                     # save results
@@ -207,6 +209,7 @@ class OpenAlexClient:
                     next_cursor, papers = await self._fetch_page(session, oa_query, next_cursor)
                     ranked_papers = [(papers[i], i + rank_offset) for i in range(0, len(papers))]
                     rank_offset += len(papers)
+                    update_chunk = len(papers)
                     if ranked_papers:
                         paper_db.insert_run_paper_batch(run_id, ranked_papers)
                     # no pages left
@@ -218,7 +221,7 @@ class OpenAlexClient:
                 finally:
                     # update progress
                     if isinstance(progress, TQDM):
-                        progress.update(MAX_PER_PAGE)
+                        progress.update(update_chunk)
 
         # close progress bar if using
         if isinstance(progress, TQDM):
@@ -269,9 +272,9 @@ class OpenAlexClient:
                         paper_db.insert_paper_batch(found_papers)
 
             # pass 2 - fetch by title
-            if not skip_title_search:
-                title_tasks = [_fetch_title_wrapper(semaphore, c, self._fetch_by_exact_title(session, c.id)) for c in
-                               titles]
+            if not skip_title_search and titles:
+                title_tasks = [_fetch_title_wrapper(semaphore, c, self._fetch_by_exact_title(session, c.id))
+                               for c in titles]
                 for future in logger.get_data_queue(title_tasks, "Fetching citation details by title", "citation",
                                                     is_async=True):
                     try:
@@ -299,13 +302,14 @@ class OpenAlexClient:
 
         return num_doi + num_title
 
-    async def generate_openalex_query(self, nl_query: str) -> str:
+    async def generate_openalex_query(self, model_client: ModelClient, nl_query: str) -> str:
         """
         Use an LLM to convert a natural language search query
         to an OpenAlex style search query based on Elasticsearch query
 
         https://docs.openalex.org/how-to-use-the-api/get-lists-of-entities/search-entities#boolean-searches
 
+        :param model_client: LLM to use to generate query
         :param nl_query: Natural language query for papers
         :raises ExceedMaxQueryGenerationAttemptsError: If fail to extract query from model reply
         :return: OpenAlex query string
@@ -314,7 +318,7 @@ class OpenAlexClient:
         # error if exceed retries
         for attempt in range(0, MAX_RETRIES):
             logger.info(f"Generating OpenAlex query ({attempt + 1}/{MAX_RETRIES}) | prompt: {nl_query.strip()}")
-            completion, timer = await self._model_client.prompt(
+            completion, timer = await model_client.prompt(
                 messages=[
                     {"role": "system", "content": self._nl_to_query_context},
                     {"role": "user", "content": f"\nNatural language prompt:\n{nl_query.strip()}"}
