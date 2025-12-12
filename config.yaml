@@ -23,43 +23,8 @@ snowball:
   # Default: 0.4
   min_similarity_score: ''
 
-# Options for generating Elastic search query for OpenAlex
-# REQUIRED
-query_generation:
-  # LLM Options
-  agent:
-    # Model to use for parsing natural language paper search into findpapers syntax
-    # If using ollama (default), search for desired models here: https://ollama.com/search
-    # If using OpenAI, search for desired models here: https://platform.openai.com/docs/models
-    # Default: llama3
-    # (env: SS_QG_MODEL)
-    model: ''
-
-    # If using ollama, specify a tag model to use, will default to 'latest'
-    # Default: latest
-    # (env: SS_QB_TAG)
-    tag: ''
-
 # Options for ranking papers
 abstract_ranking:
-  # LLM Options
-  agent:
-    # Model to use for ranking abstracts
-    # If using ollama (default), search for desired models here: https://ollama.com/search
-    # If using OpenAI, search for desired models here: https://platform.openai.com/docs/models
-    # Default: llama3
-    # (env: SS_AR_MODEL)
-    model: ''
-
-    # If using ollama, specify a tag model to use
-    # Default: latest
-    # (env: SS_AR_TAG)
-    tag: ''
-
-  # Context window of selected model
-  # Default: 5000
-  # (env: SS_AR_CONTEXT_WINDOW)
-  context_window: ''
 
   # Average tokens per word
   # Default: 1.2
@@ -83,7 +48,7 @@ openalex:
   # Optional email to use for 'polite pool' for better access
   # Queries are 10x faster if an email is provided
   # https://docs.openalex.org/how-to-use-the-api/rate-limits-and-authentication#the-polite-pool
-  # (env: SB_OA_EMAIL)
+  # (env: SS_OA_EMAIL)
   email: ''
 
 # Config for Grobid
@@ -139,9 +104,28 @@ ollama:
   # Useful if ollama server is not running locally, ie running on a remote host with more resources available
   # Default: localhost
   # (env: SS_OLLAMA_HOST)
-  host: ''
+  ollama_host: ''
 
   # Useful if ollama server is not running locally, ie running on a remote host with more resources available
   # Default: 11434
   # (env: SS_OLLAMA_PORT)
-  port: ''
+  ollama_port: ''
+
+# Config for lLM
+agent:
+    # Model to use for generating queries and ranking abstracts
+    # If using ollama (default), search for desired models here: https://ollama.com/search
+    # If using OpenAI, search for desired models here: https://platform.openai.com/docs/models
+    # Default: llama3
+    # (env: SS_AGENT_MODEL)
+    model_name: ''
+
+    # If using ollama, specify a tag model to use
+    # Default: latest
+    # (env: SS_AGENT_TAG)
+    model_tag: ''
+
+    # Context window of selected model
+    # Default: 5000 - conservative estimate
+    # (env: SS_AGENT_CONTEXT_WINDOW)
+    context_window: ''
