@@ -5,10 +5,10 @@ from ai.ollama import OllamaClient
 from ai.openai import OpenAIClient, OPENAI_API_KEY_ENV
 from cli.rank import rank_papers
 from cli.snowball import snowball
+from config.parser import Config
 from db.paper_database import PaperDatabase
 from grobid.worker import GrobidWorker
 from openalex.client import OpenAlexClient
-from util.config_parser import Config
 from util.logger import logger
 from util.output import write_papers_to_json, print_ranked_papers
 from util.timer import Timer

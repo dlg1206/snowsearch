@@ -1,10 +1,10 @@
 from typing import List, Tuple
 
+from config.parser import Config
 from db.paper_database import PaperDatabase
 from dto.paper_dto import PaperDTO
 from grobid.worker import GrobidWorker
 from openalex.client import OpenAlexClient
-from util.config_parser import Config
 from util.logger import logger
 from util.timer import Timer
 from util.verify import validate_all_papers_found
