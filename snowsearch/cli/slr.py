@@ -49,7 +49,7 @@ async def run_slr(db: PaperDatabase, config: Config, nl_query: str,
     )
 
     # init run
-    db.load_embedding_model()   # preempt model load
+    db.load_embedding_model()  # preempt model load
     slt_timer = Timer()
     logger.info("Beginning automatic strategic literature review")
     run_id = db.start_run()
@@ -75,17 +75,22 @@ async def run_slr(db: PaperDatabase, config: Config, nl_query: str,
                                                min_score=config.snowball.min_similarity_score)
     timer = Timer()
     logger.info(f"Starting {config.snowball.rounds} rounds of snowballing")
-    await snowball(db, openalex_client, grobid_worker, config.snowball.rounds, seed_papers,
-                   nl_query=nl_query,
-                   round_quota=config.snowball.round_quota,
-                   min_similarity_score=config.snowball.min_similarity_score,
-                   ignore_quota=ignore_quota)
+    processed_papers, new_citations = await snowball(db, openalex_client, grobid_worker, config.snowball.rounds,
+                                                     seed_papers,
+                                                     nl_query=nl_query,
+                                                     round_quota=config.snowball.round_quota,
+                                                     min_similarity_score=config.snowball.min_similarity_score,
+                                                     ignore_quota=ignore_quota)
+    # log info
     logger.info(f"Snowballing complete in {timer.format_time()}s")
+    logger.info(f"Processed {processed_papers} new papers")
+    logger.info(f"Fetched details for {new_citations} new citations")
 
     # exit early if not ranking
     if skip_paper_ranking:
         logger.warn("Skipping paper ranking")
         db.end_run(run_id)
+        logger.info(f"Completed strategic literature review in {slt_timer.format_time()}s")
         return
 
     # after snowballing, get top N papers that best match the prompt and rank them
@@ -97,6 +102,7 @@ async def run_slr(db: PaperDatabase, config: Config, nl_query: str,
     if not papers:
         db.end_run(run_id)
         raise Exception("No papers to rank")
+
     # rank and print output
     ranked_papers = await rank_papers(config.ranking, nl_query, papers)
     if json_output:

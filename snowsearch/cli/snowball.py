@@ -100,6 +100,11 @@ async def snowball(db: PaperDatabase, openalex_client: OpenAlexClient, grobid_wo
             logger.warn(f"Did not meet round quota, processing {remaining_quota} additional papers")
             round_papers = __get_papers_for_round(remaining_quota)
 
+            # exit early if no papers to snowball with
+            if not round_papers:
+                logger.warn("Did not find more valid papers to meet quota; exiting early")
+                break
+
         # fetch metadata for new citations
         citations = set()
         for p in all_round_papers:
