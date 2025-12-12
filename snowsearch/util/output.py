@@ -94,7 +94,7 @@ def print_ranked_papers(db: PaperDatabase, papers: List[PaperDTO],
         # add score if requested
         if nl_query:
             title_score, abstract_score = db.get_embedding_match_score(paper.id, nl_query)
-            row.insert(2, f"{100 * title_score:.01f}%")
+            row.insert(2, f"{100 * title_score:.01f}%" if title_score else None)
             row.insert(3, f"{100 * abstract_score:.01f}%" if abstract_score else None)
 
         # add abstract if requested

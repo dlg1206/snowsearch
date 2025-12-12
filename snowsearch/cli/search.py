@@ -87,6 +87,10 @@ def run_search(db: PaperDatabase, nl_query: str,
     :param min_similarity_score: Minimum similarity score for filter cutoff (Default: None)
     :param order_by_abstract: Return search order by abstract match then title match (Default: False)
     """
+    # get all papers if none provided
+    if paper_limit is None:
+        paper_limit = db.get_paper_count()
+
     if exact_match:
         papers = db.search_papers_by_title_match(nl_query,
                                                  # if abstract then processed by grobid
