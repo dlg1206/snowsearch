@@ -16,22 +16,28 @@ Description:
 """
 
 
-def write_ranked_papers_to_json(db: PaperDatabase, json_output: str, model_used: str, nl_query: str,
-                                papers: List[PaperDTO]) -> str:
+def write_papers_to_json(db: PaperDatabase, json_output: str, papers: List[PaperDTO],
+                         model_used: str = None, nl_query: str = None) -> str:
     """
     Write paper details to json
 
     :param db: Paper database to get additional papers details
     :param json_output: Path to json output file
-    :param model_used: Model used to rank the papers
-    :param nl_query: Natural language query to score against title and abstract
     :param papers: Order list of papers to write to file
+    :param model_used: Model used to rank the papers (Default: None)
+    :param nl_query: Natural language query to score against title and abstract (Default: None)
     :return: Path to output path
     """
     # format abstracts
     results = {}
     for rank, paper in enumerate(papers, start=1):
-        title_score, abstract_score = db.get_embedding_match_score(paper.id, nl_query)
+        # calc match if nl_query provided
+        if nl_query:
+            title_score, abstract_score = db.get_embedding_match_score(paper.id, nl_query)
+        else:
+            title_score, abstract_score = None, None
+
+        # save data
         results[rank] = {
             'title': paper.id,
             'title_match': title_score,
@@ -48,6 +54,13 @@ def write_ranked_papers_to_json(db: PaperDatabase, json_output: str, model_used:
         'original_search': nl_query,
         'rankings': results
     }
+
+    # remove values if not used
+    if not model_used:
+        data.pop('model')
+    if not nl_query:
+        data.pop('original_search')
+
     # write json
     json_output = json_output if json_output.endswith('.json') else f"{json_output}.json"
     with open(json_output, 'w') as f:

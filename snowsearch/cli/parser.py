@@ -176,6 +176,7 @@ def _add_search_command(root_command) -> None:
     _add_semantic_search_arg(search)
     _add_limit_flag_arg(search)
     _add_min_similarity_score_flag_arg(search)
+    _add_json_flag_arg(search)
 
     # add unique args
     search.add_argument('--only-open-access',

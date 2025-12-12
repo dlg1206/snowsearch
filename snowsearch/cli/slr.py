@@ -10,7 +10,7 @@ from grobid.worker import GrobidWorker
 from openalex.client import OpenAlexClient
 from util.config_parser import Config
 from util.logger import logger
-from util.output import write_ranked_papers_to_json, print_ranked_papers
+from util.output import write_papers_to_json, print_ranked_papers
 from util.timer import Timer
 
 """
@@ -107,7 +107,7 @@ async def run_slr(db: PaperDatabase, config: Config, nl_query: str,
     ranked_papers = await rank_papers(config.ranking, nl_query, papers)
     if json_output:
         model = f"{config.ranking.agent_config.model_name}:{config.ranking.agent_config.model_tag}"
-        json_output = write_ranked_papers_to_json(db, json_output, model, nl_query, ranked_papers)
+        json_output = write_papers_to_json(db, json_output, ranked_papers, model_used=model, nl_query=nl_query)
         logger.info(f"Results saved to '{json_output}'")
     else:
         # pretty print results

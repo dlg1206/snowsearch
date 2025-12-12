@@ -78,7 +78,8 @@ async def _execute(db: PaperDatabase, args: Namespace) -> None:
                        only_open_access=args.only_open_access,
                        only_processed=args.only_processed,
                        min_similarity_score=args.min_similarity_score,
-                       order_by_abstract=args.order_by_abstract)
+                       order_by_abstract=args.order_by_abstract,
+                       json_output=args.json)
 
         case 'inspect':
             run_inspect(db, args.paper_title)

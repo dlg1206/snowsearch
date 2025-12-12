@@ -6,7 +6,7 @@ from tabulate import tabulate
 from db.paper_database import PaperDatabase
 from dto.paper_dto import PaperDTO
 from util.logger import logger
-from util.output import print_ranked_papers
+from util.output import print_ranked_papers, write_papers_to_json
 
 """
 File: search.py
@@ -74,7 +74,8 @@ def run_search(db: PaperDatabase, nl_query: str,
                only_open_access: bool = False,
                only_processed: bool = False,
                min_similarity_score: float = None,
-               order_by_abstract: bool = False) -> None:
+               order_by_abstract: bool = False,
+               json_output: str = None) -> None:
     """
     Run a search in the neo4j database
 
@@ -86,7 +87,10 @@ def run_search(db: PaperDatabase, nl_query: str,
     :param only_processed: Return papers that have been processed with Grobid (Default: False)
     :param min_similarity_score: Minimum similarity score for filter cutoff (Default: None)
     :param order_by_abstract: Return search order by abstract match then title match (Default: False)
+    :param json_output: Path to save results to instead of printing to stdout (Default: None)
     """
+    logger.info("Searching database")
+
     # get all papers if none provided
     if paper_limit is None:
         paper_limit = db.get_paper_count()
@@ -115,5 +119,10 @@ def run_search(db: PaperDatabase, nl_query: str,
                                               order_by_abstract=order_by_abstract)
         if not papers:
             logger.warn(f"Found no paper titles that match the search within the search filters | '{nl_query}'")
-        # print
+
+    if json_output:
+        json_output = write_papers_to_json(db, json_output, papers, nl_query=nl_query)
+        logger.info(f"Results saved to '{json_output}'")
+    else:
+        # pretty print results
         print_ranked_papers(db, papers, include_abstract=True, nl_query=nl_query)
