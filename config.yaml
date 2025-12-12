@@ -7,11 +7,11 @@ snowball:
 
   # Number of rounds of snowballing to do
   # REQUIRED
-  rounds: 3
+  rounds: 5
 
   # For each round, the number of papers to snowball (fetch citation details for)
   # Leave blank for no upper limit
-  round_quota: 5
+  round_quota: 10
 
   # Minimum similarity score between the natural language query and title / abstract.
   # Must be [-1,1], but 0.4 is recommended.
@@ -99,7 +99,7 @@ openalex:
   # Optional email to use for 'polite pool' for better access
   # Queries are 10x faster if an email is provided
   # https://docs.openalex.org/how-to-use-the-api/rate-limits-and-authentication#the-polite-pool
-  # email:
+  email: foo@gmail.com
 
 # Config for Grobid
 # https://github.com/kermitt2/grobid
