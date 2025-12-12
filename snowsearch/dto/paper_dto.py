@@ -5,9 +5,10 @@ from typing import Dict
 
 from db.config import DOI_PREFIX
 from openalex.config import DEFAULT_WRAP
+from util.logger import logger
 
 """
-File: grobid_dto.py
+File: paper_dto.py
 Description: DTOs for OpenAlex
 
 @author Derek Garcia
@@ -76,6 +77,9 @@ class PaperDTO:
         return hashlib.md5(self.id.encode("utf-8")).hexdigest()[:5]  # short temp uid to pass to the llm
 
     def __post_init__(self):
+        if self.id is None:
+            KeyError("PaperDTO MUST have an id")
+
         if self.doi:
             self.doi = self.doi.removeprefix(DOI_PREFIX)
 

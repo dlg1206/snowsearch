@@ -183,7 +183,7 @@ class GrobidWorker:
                         # add referenced papers, if any
                         if result.citations:
                             unique_citations.update(result.citations)
-                            paper_db.insert_citation_paper_batch(result.id, result.citations)
+                            paper_db.insert_citation_paper_batch(result.paper.id, result.citations)
 
                         num_success += 1
 

@@ -104,10 +104,9 @@ class OpenAlexClient:
         # fetch papers
         params = {'filter': f"title_and_abstract.search:{oa_query}", 'cursor': cursor}
         result = await self._fetch(session, "works", params)
-
         # parse findings
         return result['meta']['next_cursor'], [
-            PaperDTO(p.get('title', f"MISSING_TITLE_{hashlib.md5(p['id'].encode("utf-8")).hexdigest()[:5]}"),
+            PaperDTO(p.get('title') if p.get('title') else f"MISSING_TITLE_{hashlib.md5(p['id'].encode("utf-8")).hexdigest()[:5]}",
                      publication_year=p['publication_year'],
                      publication_date=p['publication_date'],
                      openalex_url=p['id'],
