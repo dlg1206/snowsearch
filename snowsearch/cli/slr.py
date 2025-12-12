@@ -50,6 +50,8 @@ async def run_slr(db: PaperDatabase, config: Config, nl_query: str,
 
     # init run
     db.load_embedding_model()   # preempt model load
+    slt_timer = Timer()
+    logger.info("Beginning automatic strategic literature review")
     run_id = db.start_run()
 
     # generate query if none provided
@@ -60,7 +62,7 @@ async def run_slr(db: PaperDatabase, config: Config, nl_query: str,
         oa_query_model = OpenAIClient(config.query_generation.model_name) \
             if os.getenv(OPENAI_API_KEY_ENV) else OllamaClient(**asdict(config.query_generation))
         oa_query = await openalex_client.generate_openalex_query(oa_query_model, nl_query)
-        db.insert_openalex_query(run_id, openalex_client.model, nl_query, oa_query)
+        db.insert_openalex_query(run_id, oa_query_model.model, nl_query, oa_query)
 
     # fetch openalex metadata from papers found by the query
     await openalex_client.search_and_save_metadata(run_id, db, oa_query)
@@ -93,6 +95,7 @@ async def run_slr(db: PaperDatabase, config: Config, nl_query: str,
                                           min_score=config.ranking.min_abstract_score)
 
     if not papers:
+        db.end_run(run_id)
         raise Exception("No papers to rank")
     # rank and print output
     ranked_papers = await rank_papers(config.ranking, nl_query, papers)
@@ -106,3 +109,4 @@ async def run_slr(db: PaperDatabase, config: Config, nl_query: str,
 
     # end run
     db.end_run(run_id)
+    logger.info(f"Completed strategic literature review in {slt_timer.format_time()}s")

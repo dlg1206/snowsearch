@@ -340,11 +340,8 @@ class OpenAlexClient:
             if attempt + 1 < MAX_RETRIES:
                 logger.warn("Failed to generate OpenAlex query, retrying. . .")
         # error if exceed retries
-        raise ExceedMaxQueryGenerationAttemptsError(self._model_client.model)
+        raise ExceedMaxQueryGenerationAttemptsError(model_client.model)
 
-    @property
-    def model(self) -> str:
-        return self._model_client.model
 
 
 async def _fetch_doi_batch_wrapper(semaphore: Semaphore, callback) -> Tuple[List[PaperDTO], List[str]]:
