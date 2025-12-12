@@ -5,7 +5,7 @@ from dto.paper_dto import PaperDTO
 
 """
 File: grobid_dto.py
-Description: DTOs for Grobid
+Description: DTO for Grobid
 
 @author Derek Garcia
 """
@@ -13,6 +13,5 @@ Description: DTOs for Grobid
 
 @dataclass
 class GrobidDTO:
-    id: str
-    abstract: str
+    paper: PaperDTO
     citations: List[PaperDTO]

@@ -95,6 +95,44 @@ class GrobidWorker:
 
         logger.debug_msg(f"Saved '{output_path}' in {timer.format_time()}s | {pdf_url}")
 
+    async def process_paper(self, pdf_file_path: str, title: str = None) -> GrobidDTO:
+        """
+        Submit paper to grobid to process
+
+        :param pdf_file_path: Path to pdf to process
+        :param title: Optional title of paper (Default: None)
+        :return: Grobid DTO with grobid results
+        """
+        timer = Timer()
+        # block to prevent overwhelming grobid server
+        async with self._grobid_semaphore:
+            logger.debug_msg(f"Processing '{pdf_file_path}'")
+            _, status, content = await asyncio.to_thread(self._grobid_client.process_pdf,
+                                                         service="processFulltextDocument",
+                                                         pdf_file=pdf_file_path,
+                                                         generateIDs=None,
+                                                         consolidate_header=None,
+                                                         consolidate_citations=None,
+                                                         include_raw_citations=None,
+                                                         include_raw_affiliations=None,
+                                                         tei_coordinates=None,
+                                                         segment_sentences=None
+                                                         )
+        # raise error on non-200 response
+        if status != 200:
+            raise GrobidProcessError(title, status, content)
+        # else parse TEI
+        doc = grobid_tei_xml.parse_document_xml(content)
+        logger.debug_msg(f"Processed '{pdf_file_path}' in {timer.format_time()}s | {title}")
+        timestamp = datetime.now()
+        citations = [PaperDTO(c.title, doi=c.doi, time_added=timestamp) for c in doc.citations if c.title]
+        # use provided title if provided, else use one parsed by grobid
+        # todo - doc.header.title null?
+        paper = PaperDTO(title if title else doc.header.title,
+                         doi=doc.header.doi, abstract_text=doc.abstract,
+                         grobid_status=200, time_grobid_processed=timestamp, time_added=timestamp)
+        return GrobidDTO(paper, citations)
+
     async def _process_paper_task(self, session: ClientSession, work_dir: str, title: str, pdf_url: str) -> GrobidDTO:
         """
         Task to attempt to download and process a pdf for abstract and citations
@@ -108,34 +146,12 @@ class GrobidWorker:
         :return: DTO with paper title, abstract, and list of citations
         """
         with NamedTemporaryFile(dir=work_dir, prefix="grobid-", suffix=".pdf") as tmp_pdf:
-            timer = Timer()
             # limit number of downloaded pdfs
             async with self._pdf_file_semaphore:
                 # attempt to download paper with retry logic
                 await self._download_pdf(session, title, pdf_url, tmp_pdf.name)
-                # block to prevent overwhelming grobid server
-                async with self._grobid_semaphore:
-                    logger.debug_msg(f"Processing '{tmp_pdf.name}' | {title}")
-                    _, status, content = await asyncio.to_thread(self._grobid_client.process_pdf,
-                                                                 service="processFulltextDocument",
-                                                                 pdf_file=tmp_pdf.name,
-                                                                 generateIDs=None,
-                                                                 consolidate_header=None,
-                                                                 consolidate_citations=None,
-                                                                 include_raw_citations=None,
-                                                                 include_raw_affiliations=None,
-                                                                 tei_coordinates=None,
-                                                                 segment_sentences=None
-                                                                 )
-        # raise error on non-200 response
-        if status != 200:
-            raise GrobidProcessError(title, status, content)
-        # else parse TEI
-        doc = grobid_tei_xml.parse_document_xml(content)
-        logger.debug_msg(f"Processed '{tmp_pdf.name}' in {timer.format_time()}s | {title}")
-
-        return GrobidDTO(title, doc.abstract,
-                         [PaperDTO(c.title, c.doi, time_added=datetime.now()) for c in doc.citations if c.title])
+                # process paper
+                return await self.process_paper(tmp_pdf.name, title)
 
     async def enrich_papers(self, paper_db: PaperDatabase, papers: List[PaperDTO]) -> int:
         """
@@ -160,12 +176,10 @@ class GrobidWorker:
                 for future in logger.get_data_queue(tasks, "Processing papers", "papers", is_async=True):
                     try:
                         result: GrobidDTO = await future
+                        result.paper.download_status = 200
                         # update abstract
-                        paper_db.upsert_paper(PaperDTO(result.id,
-                                                       abstract_text=result.abstract,
-                                                       download_status=200,
-                                                       grobid_status=200,
-                                                       time_grobid_processed=datetime.now()))
+                        paper_db.upsert_paper(result.paper)
+
                         # add referenced papers, if any
                         if result.citations:
                             unique_citations.update(result.citations)
