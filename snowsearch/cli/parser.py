@@ -1,5 +1,4 @@
 from argparse import ArgumentParser
-from typing import Dict, Any
 
 from util.config_parser import DEFAULT_CONFIG_PATH
 from util.logger import Level, DEFAULT_LOG_LEVEL
@@ -119,9 +118,9 @@ def _add_slr_command(root_command) -> None:
 
     :param root_command: Command to add arg to
     """
-    slr = root_command.add_parser('slr',
-                                  help="Perform a complete literature search with search generation, "
-                                       "rounds of snowballing, and final abstract LLM ranking.")
+    desc = ("Perform a complete literature search with search generation, "
+            "rounds of snowballing, and final abstract LLM ranking.")
+    slr = root_command.add_parser('slr', description=desc, help=desc)
     # add generic args
     _add_semantic_search_arg(slr)
     _add_ignore_quota_process_flag_arg(slr)
@@ -148,9 +147,8 @@ def _add_snowball_command(root_command) -> None:
 
     :param root_command: Command to add arg to
     """
-    snowball = root_command.add_parser('snowball',
-                                       help="Perform snowballing using papers stored in the database "
-                                            "without the initial OpenAlex search or LLM ranking")
+    desc = "Perform snowballing using papers stored in the database without the initial OpenAlex search or LLM ranking"
+    snowball = root_command.add_parser('snowball', description=desc, help=desc)
     # add generic args
     _add_semantic_search_arg(snowball, False)
     _add_ignore_quota_process_flag_arg(snowball)
@@ -171,7 +169,8 @@ def _add_search_command(root_command) -> None:
 
     :param root_command: Command to add arg to
     """
-    search = root_command.add_parser('search', help="Search the database for matching papers")
+    desc = "Search the database for matching papers"
+    search = root_command.add_parser('search', description=desc, help=desc)
 
     # add generic args
     _add_semantic_search_arg(search)
@@ -202,7 +201,8 @@ def _add_inspect_command(root_command) -> None:
 
     :param root_command: Command to add arg to
     """
-    inspect = root_command.add_parser('inspect', help="Get details about a paper")
+    desc = "Get details about a paper"
+    inspect = root_command.add_parser('inspect', description=desc, help=desc)
     inspect.add_argument('paper_title',
                          metavar="<title-of-paper>",
                          type=str,
@@ -215,7 +215,8 @@ def _add_rank_command(root_command) -> None:
 
     :param root_command: Command to add arg to
     """
-    rank = root_command.add_parser('rank', help="Rank papers that best match the provided search")
+    desc = "Rank papers that best match the provided search"
+    rank = root_command.add_parser('rank', description=desc, help=desc)
     # add generic args
     _add_semantic_search_arg(rank)
     _add_limit_flag_arg(rank)
@@ -225,6 +226,26 @@ def _add_rank_command(root_command) -> None:
     rank_group = rank.add_mutually_exclusive_group()
     _add_paper_titles_flag_arg(rank_group)
     _add_paper_titles_input_flag_arg(rank_group)
+
+
+def _add_upload_command(root_command) -> None:
+    """
+    Add the upload command
+
+    :param root_command: Command to add arg to
+    """
+    desc = "Upload papers locally to the database"
+    upload = root_command.add_parser('upload', description=desc, help=desc)
+
+    upload_group = upload.add_mutually_exclusive_group(required=True)
+    upload_group.add_argument('-f', '--file',
+                              metavar='<pdf-path>',
+                              type=str,
+                              help="Path to pdf file to upload and process")
+    upload_group.add_argument('-d', '--directory',
+                              metavar='<pdf-directory-path>',
+                              type=str,
+                              help="Path to root directory of pdf files to upload")
 
 
 def create_parser() -> ArgumentParser:
@@ -264,5 +285,6 @@ def create_parser() -> ArgumentParser:
     _add_search_command(commands)  # search command - search papers in the database
     _add_inspect_command(commands)  # inspect command - show details about a paper in the database
     _add_rank_command(commands)  # rank command - use llm to rank papers
+    _add_upload_command(commands)  # upload command - upload local pdfs to the database
 
     return parser

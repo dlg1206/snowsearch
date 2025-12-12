@@ -151,7 +151,7 @@ class OpenAlexClient:
                              is_open_access=bool(p['open_access']['is_oa']),
                              pdf_url=p['open_access']['oa_url'])
             papers.append(paper)
-            missing_doi_ids.remove(paper.doi)
+            missing_doi_ids.discard(paper.doi)
             logger.debug_msg(f"Found '{paper.id}' by doi")
 
         return papers, list(missing_doi_ids)
@@ -227,28 +227,28 @@ class OpenAlexClient:
         if isinstance(progress, TQDM):
             progress.close()
 
-    async def fetch_and_save_citation_metadata(self,
-                                               paper_db: PaperDatabase,
-                                               citations: List[PaperDTO],
-                                               skip_title_search: bool = False) -> int:
+    async def fetch_and_save_paper_metadata(self,
+                                            paper_db: PaperDatabase,
+                                            papers: List[PaperDTO],
+                                            skip_title_search: bool = False) -> int:
         """
-        Fetch details for the given list of citations and save to database
+        Fetch details for the given list of papers and save to database
 
         :param paper_db: Database to save papers to
-        :param citations: List of citations to fetch details for
+        :param papers: List of papers to fetch details for
         :param skip_title_search: Optional skip title search (Default: False)
-        :return: Number of citations that the metadata was found
+        :return: Number of papers that the metadata was found
         """
         semaphore = Semaphore()  # semaphore so only 1 request at a time to prevent tripping rate limit
         num_doi = 0
         num_title = 0
         num_missing = 0
-        logger.debug_msg(f"Searching for details for {len(citations)} citations")
+        logger.debug_msg(f"Searching for details for {len(papers)} papers")
         # split into doi, title and just doi search
         doi_and_title = []
         doi_reverse_lookup = {}
         titles: List[PaperDTO] = []
-        for c in citations:
+        for c in papers:
             if c.doi:
                 doi_and_title.append(c.doi)
                 doi_reverse_lookup[c.doi] = c
@@ -261,7 +261,7 @@ class OpenAlexClient:
             if doi_chunks:
                 doi_tasks = [_fetch_doi_batch_wrapper(semaphore, self._batch_fetch_by_doi(session, chunk))
                              for chunk in doi_chunks]
-                for future in logger.get_data_queue(doi_tasks, "Fetching citation details by doi", "batch",
+                for future in logger.get_data_queue(doi_tasks, "Fetching paper details by doi", "batch",
                                                     is_async=True):
                     found_papers, missing_doi_ids = await future
                     num_doi += len(found_papers)
@@ -275,7 +275,7 @@ class OpenAlexClient:
             if not skip_title_search and titles:
                 title_tasks = [_fetch_title_wrapper(semaphore, c, self._fetch_by_exact_title(session, c.id))
                                for c in titles]
-                for future in logger.get_data_queue(title_tasks, "Fetching citation details by title", "citation",
+                for future in logger.get_data_queue(title_tasks, "Fetching paper details by title", "paper",
                                                     is_async=True):
                     try:
                         paper = await future
@@ -291,14 +291,14 @@ class OpenAlexClient:
                         logger.error_exp(e)
 
         # report results
-        if len(citations):
+        if len(papers):
             percent = lambda a, b: f"{(a / b) * 100:.01f}%"
             num_success = num_doi + num_title
             logger.info(
-                f"Search complete, successfully updated {num_success} citations ({percent(num_success, len(citations))})")
-            logger.debug_msg(f"Found {num_doi} citations by DOI ({percent(num_doi, len(citations))})")
-            logger.debug_msg(f"Found {num_title} citations by title ({percent(num_title, len(citations))})")
-            logger.debug_msg(f"Failed to find {num_missing} citations ({percent(num_missing, len(citations))})")
+                f"Search complete, successfully updated {num_success} papers ({percent(num_success, len(papers))})")
+            logger.debug_msg(f"Found {num_doi} papers by DOI ({percent(num_doi, len(papers))})")
+            logger.debug_msg(f"Found {num_title} papers by title ({percent(num_title, len(papers))})")
+            logger.debug_msg(f"Failed to find {num_missing} papers ({percent(num_missing, len(papers))})")
 
         return num_doi + num_title
 
@@ -359,12 +359,12 @@ async def _fetch_doi_batch_wrapper(semaphore: Semaphore, callback) -> Tuple[List
         return await callback
 
 
-async def _fetch_title_wrapper(semaphore: Semaphore, citation: PaperDTO, callback) -> PaperDTO:
+async def _fetch_title_wrapper(semaphore: Semaphore, paper: PaperDTO, callback) -> PaperDTO:
     """
     Util wrapper for title fetching to respect semaphore
 
     :param semaphore: Semaphore
-    :param citation: Citation of Paper to fetch
+    :param paper: paper to fetch
     :param callback: Title fetch callback function
     :raises MissingOpenAlexEntryError: If could not find paper by title
     :return: Paper details
@@ -373,4 +373,4 @@ async def _fetch_title_wrapper(semaphore: Semaphore, citation: PaperDTO, callbac
         r = await callback
     if r:
         return r
-    raise MissingOpenAlexEntryError(citation.doi, citation.id)
+    raise MissingOpenAlexEntryError(paper.doi, paper.id)

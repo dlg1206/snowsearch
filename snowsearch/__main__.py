@@ -1,6 +1,8 @@
 import asyncio
 import csv
 from argparse import Namespace
+from os import path
+from pathlib import Path
 from typing import List
 
 from dotenv import load_dotenv
@@ -11,6 +13,7 @@ from cli.rank import run_rank
 from cli.search import run_search
 from cli.slr import run_slr
 from cli.snowball import run_snowball
+from cli.upload import run_upload
 from db.paper_database import PaperDatabase
 from util.config_parser import Config
 from util.logger import logger, Level
@@ -96,7 +99,10 @@ async def _execute(db: PaperDatabase, args: Namespace) -> None:
                            rank_config.min_abstract_score if args.min_similarity_score is None else args.min_similarity_score,
                            json_output=args.json,
                            paper_titles_to_rank=papers)
-
+        case 'upload':
+            # set file paths
+            paper_pdf_paths = [args.file] if args.file else [str(f) for f in Path(args.directory).iterdir() if f.is_file()]
+            await run_upload(db, Config(args.config), paper_pdf_paths)
 
 def main() -> None:
     """

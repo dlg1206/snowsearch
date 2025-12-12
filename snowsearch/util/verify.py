@@ -1,6 +1,7 @@
 from typing import List
 
 from dto.paper_dto import PaperDTO
+from grobid.config import KILOBYTE, PDF_MAGIC
 
 """
 File: verify.py
@@ -20,3 +21,15 @@ def validate_all_papers_found(paper_titles: List[str], found_papers: List[PaperD
     :return: List of titles not found in the database
     """
     return list(set(paper_titles) - {p.id for p in found_papers})
+
+
+def validate_file_is_pdf(file_path: str) -> bool:
+    """
+    Verify that the file is a pdf
+
+    :param file_path: Filepath to check
+    :return: True if pdf, false otherwise
+    """
+    with open(file_path, "rb") as f:
+        chunk = f.read(KILOBYTE)
+        return chunk.startswith(PDF_MAGIC)
