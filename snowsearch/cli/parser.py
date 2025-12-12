@@ -226,6 +226,24 @@ def _add_rank_command(root_command) -> None:
     _add_paper_titles_flag_arg(rank_group)
     _add_paper_titles_input_flag_arg(rank_group)
 
+def _add_upload_command(root_command) -> None:
+    """
+    Add the upload command
+
+    :param root_command: Command to add arg to
+    """
+    upload = root_command.add_parser('upload',
+                                     help="Upload papers locally to the database")
+
+    upload_group = upload.add_mutually_exclusive_group(required=True)
+    upload_group.add_argument('-f', '--file',
+                            metavar='<pdf-path>',
+                            type=str,
+                            help="Path to pdf file to upload and process")
+    upload_group.add_argument('-d', '--directory',
+                            metavar='<pdf-directory-path>',
+                            type=str,
+                            help="Path to root directory of pdf files to upload")
 
 def create_parser() -> ArgumentParser:
     """
@@ -264,5 +282,6 @@ def create_parser() -> ArgumentParser:
     _add_search_command(commands)  # search command - search papers in the database
     _add_inspect_command(commands)  # inspect command - show details about a paper in the database
     _add_rank_command(commands)  # rank command - use llm to rank papers
+    _add_upload_command(commands)   # upload command - upload local pdfs to the database
 
     return parser

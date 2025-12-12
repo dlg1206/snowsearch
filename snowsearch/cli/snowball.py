@@ -106,7 +106,7 @@ async def snowball(db: PaperDatabase, openalex_client: OpenAlexClient, grobid_wo
             citations.update(db.get_citations(p, True))
 
         # todo - config to skip title search
-        new_citations += await openalex_client.fetch_and_save_citation_metadata(db, list(citations))
+        new_citations += await openalex_client.fetch_and_save_paper_metadata(db, list(citations))
 
         # Repeat
         logger.info(f"Snowball Round {r + 1} completed in {timer.format_time()}s")
