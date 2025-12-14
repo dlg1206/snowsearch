@@ -6,6 +6,7 @@ import yaml
 
 from config.default import OllamaDefaults, AgentDefaults, AbstractRankingDefaults, GrobidDefaults, SnowballDefaults
 from grobid.config import MAX_CONCURRENT_DOWNLOADS, MAX_PDF_COUNT
+from util.logger import logger
 
 """
 File: parser.py
@@ -122,6 +123,7 @@ class Config:
     def __init__(self, config_file: str = None) -> None:
         # use env + defaults if no config to use
         if not config_file:
+            logger.debug_msg("Using default configuration")
             agent_config = AgentConfigDTO()
             self._snowball = SnowballConfigDTO()
             self._query_generation = agent_config
@@ -131,6 +133,7 @@ class Config:
             return
 
         # load config file if provided
+        logger.info(f"Loading config details from '{config_file}'")
         with open(config_file, 'r') as file:
             config = yaml.safe_load(file)
 
