@@ -4,17 +4,18 @@ import os
 from asyncio import Semaphore
 from typing import List, Dict, Tuple, Any
 
-from ai.model import ModelClient
 from aiohttp import ClientSession
+from tqdm.std import tqdm as TQDM
+from yarl import URL
+
+from ai.model import ModelClient
 from db.config import DOI_PREFIX
 from db.paper_database import PaperDatabase
 from dto.paper_dto import PaperDTO
 from openalex.config import POLITE_RATE_LIMIT_SLEEP, DEFAULT_RATE_LIMIT_SLEEP, MAX_PER_PAGE, OPENALEX_BASE, \
     QUERY_JSON_RE, MAX_RETRIES, NL_TO_QUERY_CONTEXT_FILE, MAX_DOI_PER_PAGE
 from openalex.exception import MissingOpenAlexEntryError, ExceedMaxQueryGenerationAttemptsError
-from tqdm.std import tqdm as TQDM
 from util.logger import logger
-from yarl import URL
 
 """
 File: client.py
@@ -148,9 +149,9 @@ class OpenAlexClient:
                              openalex_url=p['id'],
                              doi=p['doi'],
                              is_open_access=bool(p['open_access']['is_oa']),
-                             pdf_url=p['open_access']['oa_url'])
+                             pdf_url=p['primary_location']['pdf_url'])
             papers.append(paper)
-            missing_doi_ids.discard(paper.doi)
+            missing_doi_ids.discard(paper.doi.lower())
             logger.debug_msg(f"Found '{paper.id}' by doi")
 
         return papers, list(missing_doi_ids)
@@ -182,7 +183,7 @@ class OpenAlexClient:
                         openalex_url=paper['id'],
                         doi=paper['doi'],
                         is_open_access=bool(paper['open_access']['is_oa']),
-                        pdf_url=paper['open_access']['oa_url'])
+                        pdf_url=paper['primary_location']['pdf_url'])
 
     async def search_and_save_metadata(self, run_id: int, paper_db: PaperDatabase, oa_query: str) -> int:
         """
@@ -255,8 +256,8 @@ class OpenAlexClient:
         titles: List[PaperDTO] = []
         for c in papers:
             if c.doi:
-                doi_and_title.append(c.doi)
-                doi_reverse_lookup[c.doi] = c
+                doi_and_title.append(c.doi.lower())
+                doi_reverse_lookup[c.doi.lower()] = c
             else:
                 titles.append(c)
         doi_chunks = [doi_and_title[i:i + MAX_DOI_PER_PAGE] for i in range(0, len(doi_and_title), MAX_DOI_PER_PAGE)]
