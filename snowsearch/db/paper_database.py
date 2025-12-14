@@ -1,6 +1,5 @@
 import logging
 import os
-import warnings
 from dataclasses import asdict
 from datetime import datetime
 from typing import Dict, List, Tuple, Any
@@ -83,15 +82,15 @@ class PaperDatabase(Neo4jDatabase):
             return
 
         # download embedding model if needed
-        model_downloaded = _is_model_local(self._embedding_model_name)
-        timer = None
-        if not model_downloaded:
+        timer = Timer()
+        if _is_model_local(self._embedding_model_name):
+            logger.info(f"Loading embedding model '{self._embedding_model_name}'")
+        else:
             logger.warn(f"Embedding model '{self._embedding_model_name}' not downloaded locally, downloading now")
-            timer = Timer()
+
         from sentence_transformers import SentenceTransformer  # lazy load
         self._embedding_model = SentenceTransformer(self._embedding_model_name, device='cpu')
-        if timer:
-            logger.info(f"Downloaded '{self._embedding_model_name}' in {timer.format_time()}s")
+        logger.info(f"Loaded '{self._embedding_model_name}' in {timer.format_time()}s")
 
     def start_run(self) -> int:
         """
