@@ -1,0 +1,10 @@
+# file: compose.database.yaml
+# description: Override to open the database ports
+#
+# @author: Derek Garcia
+services:
+  abstract_db:
+    # default values
+    ports:
+      - "7474:7474"  # Neo4j Browser
+      - "7687:7687"  # Bolt protocol
