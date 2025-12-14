@@ -9,7 +9,6 @@ services:
   ollama:
     image: ollama/ollama:0.12.3
     container_name: ollama
-    # todo allow access to GPU if available - current just cpu only
     networks:
       - snowsearch-net
     volumes:

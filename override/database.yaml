@@ -1,4 +1,4 @@
-# file: compose.database.yaml
+# file: database.yaml
 # description: Override to open the database ports
 #
 # @author: Derek Garcia

@@ -1,4 +1,4 @@
-# file: compose.dev.yaml
+# file: dev.yaml
 # description: Dev override to open all service ports for development on localhost
 #
 # @author: Derek Garcia
