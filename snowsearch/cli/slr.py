@@ -65,7 +65,12 @@ async def run_slr(db: PaperDatabase, config: Config, nl_query: str,
         db.insert_openalex_query(run_id, oa_query_model.model, nl_query, oa_query)
 
     # fetch openalex metadata from papers found by the query
-    await openalex_client.search_and_save_metadata(run_id, db, oa_query)
+    hits = await openalex_client.search_and_save_metadata(run_id, db, oa_query)
+    if not hits:
+        db.end_run(run_id)
+        logger.warn("Did not find any papers in OpenAlex, exiting early")
+        logger.warn("Try refining your search or manually enter a search query with the '-q' flag")
+        return
 
     # perform N rounds of snowballing
     seed_papers = db.search_papers_by_nl_query(nl_query,
@@ -73,6 +78,12 @@ async def run_slr(db: PaperDatabase, config: Config, nl_query: str,
                                                only_open_access=True,
                                                paper_limit=config.snowball.round_quota,
                                                min_score=config.snowball.min_similarity_score)
+
+    if not seed_papers:
+        db.end_run(run_id)
+        logger.warn("Did not find any seed papers for snowballing, exiting early")
+        return
+
     timer = Timer()
     logger.info(f"Starting {config.snowball.rounds} rounds of snowballing")
     processed_papers, new_citations = await snowball(db, openalex_client, grobid_worker, config.snowball.rounds,
@@ -101,7 +112,8 @@ async def run_slr(db: PaperDatabase, config: Config, nl_query: str,
 
     if not papers:
         db.end_run(run_id)
-        raise Exception("No papers to rank")
+        logger.warn("No papers to rank, exiting early")
+        return
 
     # rank and print output
     ranked_papers = await rank_papers(config.ranking, nl_query, papers)

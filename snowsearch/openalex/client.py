@@ -4,18 +4,17 @@ import os
 from asyncio import Semaphore
 from typing import List, Dict, Tuple, Any
 
-from aiohttp import ClientSession
-from tqdm.std import tqdm as TQDM
-from yarl import URL
-
 from ai.model import ModelClient
+from aiohttp import ClientSession
 from db.config import DOI_PREFIX
 from db.paper_database import PaperDatabase
+from dto.paper_dto import PaperDTO
 from openalex.config import POLITE_RATE_LIMIT_SLEEP, DEFAULT_RATE_LIMIT_SLEEP, MAX_PER_PAGE, OPENALEX_BASE, \
     QUERY_JSON_RE, MAX_RETRIES, NL_TO_QUERY_CONTEXT_FILE, MAX_DOI_PER_PAGE
-from dto.paper_dto import PaperDTO
 from openalex.exception import MissingOpenAlexEntryError, ExceedMaxQueryGenerationAttemptsError
+from tqdm.std import tqdm as TQDM
 from util.logger import logger
+from yarl import URL
 
 """
 File: client.py
@@ -106,7 +105,8 @@ class OpenAlexClient:
         result = await self._fetch(session, "works", params)
         # parse findings
         return result['meta']['next_cursor'], [
-            PaperDTO(p.get('title') if p.get('title') else f"MISSING_TITLE_{hashlib.md5(p['id'].encode("utf-8")).hexdigest()[:5]}",
+            PaperDTO(p.get('title') if p.get(
+                'title') else f"MISSING_TITLE_{hashlib.md5(p['id'].encode("utf-8")).hexdigest()[:5]}",
                      publication_year=p['publication_year'],
                      publication_date=p['publication_date'],
                      openalex_url=p['id'],
@@ -184,18 +184,22 @@ class OpenAlexClient:
                         is_open_access=bool(paper['open_access']['is_oa']),
                         pdf_url=paper['open_access']['oa_url'])
 
-    async def search_and_save_metadata(self, run_id: int, paper_db: PaperDatabase, oa_query: str) -> None:
+    async def search_and_save_metadata(self, run_id: int, paper_db: PaperDatabase, oa_query: str) -> int:
         """
         Fetch paper metadata from OpenAlex based on a query and save to database
 
         :param run_id: ID of current run
         :param paper_db: Database to save papers to
         :param oa_query: OpenAlex query string to use
+        :return: The number of hits found
         """
         oa_query = oa_query.replace("'", '"')
         async with ClientSession() as session:
             hits = await self._fetch_paper_count(session, oa_query)
             logger.debug_msg(f"Found {hits} papers in OpenAlex")
+            # exit early if no hits
+            if not hits:
+                return 0
             progress = logger.get_data_queue(hits, "Querying OpenAlex Database", "paper")
             # fetch all papers
             next_cursor = "*"
@@ -225,6 +229,8 @@ class OpenAlexClient:
         # close progress bar if using
         if isinstance(progress, TQDM):
             progress.close()
+
+        return hits
 
     async def fetch_and_save_paper_metadata(self,
                                             paper_db: PaperDatabase,
@@ -340,7 +346,6 @@ class OpenAlexClient:
                 logger.warn("Failed to generate OpenAlex query, retrying. . .")
         # error if exceed retries
         raise ExceedMaxQueryGenerationAttemptsError(model_client.model)
-
 
 
 async def _fetch_doi_batch_wrapper(semaphore: Semaphore, callback) -> Tuple[List[PaperDTO], List[str]]:
