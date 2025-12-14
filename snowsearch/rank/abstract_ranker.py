@@ -35,7 +35,7 @@ class AbstractRanker:
         self._token_per_word = tokens_per_word
 
         # load content for one-shot
-        with open(RANK_CONTEXT_FILE, 'r') as f:
+        with open(RANK_CONTEXT_FILE, 'r', encoding='utf-8') as f:
             self._rank_context = f.read()
 
         # reserve tokens for one-shot

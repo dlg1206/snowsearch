@@ -63,7 +63,7 @@ def write_papers_to_json(db: PaperDatabase, json_output: str, papers: List[Paper
 
     # write json
     json_output = json_output if json_output.endswith('.json') else f"{json_output}.json"
-    with open(json_output, 'w') as f:
+    with open(json_output, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=4)
 
     return json_output

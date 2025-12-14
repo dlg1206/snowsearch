@@ -43,7 +43,7 @@ async def _execute(db: PaperDatabase, config: Config, args: Namespace) -> None:
         :param csv_path: Path to csv file with paper titles
         :return: List of loaded titles
         """
-        with open(csv_path, 'r') as f:
+        with open(csv_path, 'r', encoding='utf-8') as f:
             return list({r[0] for r in csv.reader(f)})
 
     match args.command:

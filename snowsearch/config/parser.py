@@ -131,7 +131,7 @@ class Config:
 
         # load config file if provided
         logger.info(f"Loading config details from '{config_file}'")
-        with open(config_file, 'r') as file:
+        with open(config_file, 'r', encoding='utf-8') as file:
             config = yaml.safe_load(file)
 
         # get config overrides lambda

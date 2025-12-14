@@ -46,7 +46,7 @@ class OpenAlexClient:
             self._api_key_available = True
             logger.info("Found OpenAlex API key")
         # load content for one-shot
-        with open(NL_TO_QUERY_CONTEXT_FILE, 'r') as f:
+        with open(NL_TO_QUERY_CONTEXT_FILE, 'r', encoding='utf-8') as f:
             self._nl_to_query_context = f.read()
 
     def _add_auth(self, params_obj: Dict[str, str | int]) -> None:
