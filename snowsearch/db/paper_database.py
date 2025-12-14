@@ -1,3 +1,4 @@
+import logging
 import os
 import warnings
 from dataclasses import asdict
@@ -21,8 +22,8 @@ Description: Specialized interface for abstracting Neo4j commands to the databas
 @author Derek Garcia
 `"""
 
-# suppress cuda warnings
-warnings.filterwarnings("ignore", message=".*CUDA initialization.*")
+# supress INFO logs from sentence_transformers
+logging.getLogger("sentence_transformers").setLevel(logging.WARNING)
 
 
 class PaperDatabase(Neo4jDatabase):
@@ -81,15 +82,6 @@ class PaperDatabase(Neo4jDatabase):
         if self._embedding_model:
             return
 
-        # use gpu if cuda available
-        from torch.cuda import is_available
-        if is_available():
-            device = "cuda"
-            logger.debug_msg("Embedding model utilizing gpu")
-        else:
-            device = "cpu"
-            logger.warn("Using cpu to create embeddings -- this may impact performance")
-
         # download embedding model if needed
         model_downloaded = _is_model_local(self._embedding_model_name)
         timer = None
@@ -97,7 +89,7 @@ class PaperDatabase(Neo4jDatabase):
             logger.warn(f"Embedding model '{self._embedding_model_name}' not downloaded locally, downloading now")
             timer = Timer()
         from sentence_transformers import SentenceTransformer  # lazy load
-        self._embedding_model = SentenceTransformer(self._embedding_model_name, device=device)
+        self._embedding_model = SentenceTransformer(self._embedding_model_name, device='cpu')
         if timer:
             logger.info(f"Downloaded '{self._embedding_model_name}' in {timer.format_time()}s")
 
