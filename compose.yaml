@@ -9,9 +9,6 @@ services:
   ollama:
     image: ollama/ollama:0.12.3
     container_name: ollama
-    # TODO - remove public access
-    ports:
-      - "11434:11434"
     # todo allow access to GPU if available - current just cpu only
     networks:
       - snowsearch-net
@@ -22,11 +19,6 @@ services:
   abstract_db:
     image: neo4j:5.26.13
     container_name: abstract_db
-    # default values
-    # TODO - remove public access
-    ports:
-      - "7474:7474"  # Neo4j Browser
-      - "7687:7687"  # Bolt protocol
     environment:
       NEO4J_AUTH: ${NEO4J_AUTH:?Neo4j 'user/pw' must be set in the .env file}
       NEO4J_client_allow__telemetry: false
@@ -42,9 +34,6 @@ services:
   grobid:
     image: grobid/grobid:0.8.2
     container_name: grobid
-    # TODO - remove public access
-    ports:
-      - "8070:8070"  # API port
     networks:
       - snowsearch-net
 

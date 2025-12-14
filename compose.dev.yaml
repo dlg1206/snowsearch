@@ -1,0 +1,15 @@
+# file: compose.dev.yaml
+# description: Dev override to open all service ports for development on localhost
+#
+# @author: Derek Garcia
+services:
+  ollama:
+    ports:
+      - "11434:11434" # API port
+  abstract_db:
+    ports:
+      - "7474:7474"  # Neo4j Browser
+      - "7687:7687"  # Bolt protocol
+  grobid:
+    ports:
+      - "8070:8070"  # API port
