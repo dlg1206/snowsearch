@@ -1,10 +1,10 @@
 from typing import List, Tuple
 
+from config.parser import Config
 from db.paper_database import PaperDatabase
 from dto.paper_dto import PaperDTO
 from grobid.worker import GrobidWorker
 from openalex.client import OpenAlexClient
-from util.config_parser import Config
 from util.logger import logger
 from util.timer import Timer
 from util.verify import validate_all_papers_found
@@ -99,6 +99,11 @@ async def snowball(db: PaperDatabase, openalex_client: OpenAlexClient, grobid_wo
             # else get a new batch to attempt to meet the quota
             logger.warn(f"Did not meet round quota, processing {remaining_quota} additional papers")
             round_papers = __get_papers_for_round(remaining_quota)
+
+            # exit early if no papers to snowball with
+            if not round_papers:
+                logger.warn("Did not find more valid papers to meet quota; exiting early")
+                break
 
         # fetch metadata for new citations
         citations = set()

@@ -104,10 +104,9 @@ class OpenAlexClient:
         # fetch papers
         params = {'filter': f"title_and_abstract.search:{oa_query}", 'cursor': cursor}
         result = await self._fetch(session, "works", params)
-
         # parse findings
         return result['meta']['next_cursor'], [
-            PaperDTO(p.get('title', f"MISSING_TITLE_{hashlib.md5(p['id'].encode("utf-8")).hexdigest()[:5]}"),
+            PaperDTO(p.get('title') if p.get('title') else f"MISSING_TITLE_{hashlib.md5(p['id'].encode("utf-8")).hexdigest()[:5]}",
                      publication_year=p['publication_year'],
                      publication_date=p['publication_date'],
                      openalex_url=p['id'],
@@ -340,11 +339,8 @@ class OpenAlexClient:
             if attempt + 1 < MAX_RETRIES:
                 logger.warn("Failed to generate OpenAlex query, retrying. . .")
         # error if exceed retries
-        raise ExceedMaxQueryGenerationAttemptsError(self._model_client.model)
+        raise ExceedMaxQueryGenerationAttemptsError(model_client.model)
 
-    @property
-    def model(self) -> str:
-        return self._model_client.model
 
 
 async def _fetch_doi_batch_wrapper(semaphore: Semaphore, callback) -> Tuple[List[PaperDTO], List[str]]:

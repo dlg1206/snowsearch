@@ -96,11 +96,10 @@ class PaperDatabase(Neo4jDatabase):
         if not model_downloaded:
             logger.warn(f"Embedding model '{self._embedding_model_name}' not downloaded locally, downloading now")
             timer = Timer()
-        from sentence_transformers import SentenceTransformer   # lazy load
+        from sentence_transformers import SentenceTransformer  # lazy load
         self._embedding_model = SentenceTransformer(self._embedding_model_name, device=device)
         if timer:
             logger.info(f"Downloaded '{self._embedding_model_name}' in {timer.format_time()}s")
-
 
     def start_run(self) -> int:
         """
@@ -321,6 +320,17 @@ class PaperDatabase(Neo4jDatabase):
                         papers=[{'match_id': node.match_id, **node.required_properties, **node.properties}
                                 for node in paper_nodes])
 
+    def get_paper_count(self) -> int:
+        """
+        Get the total number of papers currently in the database
+
+        :return: Number of papers in database
+        """
+        query = f"MATCH (p:{NodeType.PAPER.value}) RETURN count(p) AS count"
+        with self._driver.session() as session:
+            record = session.run(query).single()
+            return record['count']
+
     def get_paper(self, title: str) -> PaperDTO | None:
         """
         Get a paper from the database
@@ -402,7 +412,7 @@ class PaperDatabase(Neo4jDatabase):
             # convert to dtos
             return [PaperDTO.create_dto(c) for c in citations]
 
-    def get_embedding_match_score(self, title: str, nl_query: str) -> Tuple[float, float] | None:
+    def get_embedding_match_score(self, title: str, nl_query: str) -> Tuple[float | None, float | None]:
         """
         Get the embedding match score of a paper
 
@@ -450,7 +460,7 @@ class PaperDatabase(Neo4jDatabase):
         with self._driver.session() as session:
             record = session.run(query, **params).single()
             if record is None:
-                return None
+                return None, None
             return record["titleScore"], record["abstractScore"]
 
     def search_papers_by_nl_query(self, nl_query: str,

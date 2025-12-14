@@ -1,12 +1,12 @@
 from typing import List
 
+from config.parser import Config
 from db.paper_database import PaperDatabase
 from dto.grobid_dto import GrobidDTO
 from dto.paper_dto import PaperDTO
 from grobid.exception import GrobidProcessError
 from grobid.worker import GrobidWorker
 from openalex.client import OpenAlexClient
-from util.config_parser import Config
 from util.logger import logger
 from util.timer import Timer
 from util.verify import validate_file_is_pdf
@@ -18,6 +18,7 @@ Description: Upload local pdf papers to be stored in the database
 
 @author Derek Garcia
 """
+
 
 async def run_upload(db: PaperDatabase, config: Config, paper_pdf_paths: List[str]) -> None:
     """
@@ -81,7 +82,7 @@ async def run_upload(db: PaperDatabase, config: Config, paper_pdf_paths: List[st
     openalex_client = OpenAlexClient(config.openalex.email)
     n_metadata_found = await openalex_client.fetch_and_save_paper_metadata(db, papers)
     # fetch citation metadata
-    citations = set()   # use set to prevent dupe citations
+    citations = set()  # use set to prevent dupe citations
     for p in papers:
         citations.update(db.get_citations(p.id, True))
     n_metadata_found += await openalex_client.fetch_and_save_paper_metadata(db, list(citations))
@@ -90,4 +91,3 @@ async def run_upload(db: PaperDatabase, config: Config, paper_pdf_paths: List[st
     logger.info(f"Upload complete in {timer.format_time()}s")
     logger.info(f"Processed {num_success} papers")
     logger.info(f"Fetched details for {n_metadata_found} papers")
-

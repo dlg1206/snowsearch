@@ -1,6 +1,6 @@
 from argparse import ArgumentParser
 
-from util.config_parser import DEFAULT_CONFIG_PATH
+from config.parser import DEFAULT_CONFIG_PATH
 from util.logger import Level, DEFAULT_LOG_LEVEL
 
 """
@@ -176,6 +176,7 @@ def _add_search_command(root_command) -> None:
     _add_semantic_search_arg(search)
     _add_limit_flag_arg(search)
     _add_min_similarity_score_flag_arg(search)
+    _add_json_flag_arg(search)
 
     # add unique args
     search.add_argument('--only-open-access',
@@ -263,8 +264,9 @@ def create_parser() -> ArgumentParser:
     config = parser.add_argument_group("Configuration")
     config.add_argument('-c', '--config',
                         metavar="<path to config file>",
+                        nargs='?',
                         help=f"Path to config file to use (Default: {DEFAULT_CONFIG_PATH})",
-                        default=DEFAULT_CONFIG_PATH)
+                        const=DEFAULT_CONFIG_PATH)
 
     # logging flags
     logging = parser.add_argument_group("Logging")

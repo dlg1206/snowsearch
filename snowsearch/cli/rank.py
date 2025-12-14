@@ -4,12 +4,12 @@ from typing import List
 
 from ai.ollama import OllamaClient
 from ai.openai import OpenAIClient, OPENAI_API_KEY_ENV
+from config.parser import RankingConfigDTO
 from db.paper_database import PaperDatabase
 from dto.paper_dto import PaperDTO
 from rank.abstract_ranker import AbstractRanker
-from util.config_parser import RankingConfigDTO
 from util.logger import logger
-from util.output import write_ranked_papers_to_json, print_ranked_papers
+from util.output import write_papers_to_json, print_ranked_papers
 from util.verify import validate_all_papers_found
 
 """
@@ -77,7 +77,7 @@ async def run_rank(db: PaperDatabase, rank_config: RankingConfigDTO, nl_query: s
     ranked_papers = await rank_papers(rank_config, nl_query, papers_to_rank)
     if json_output:
         model = f"{rank_config.agent_config.model_name}:{rank_config.agent_config.model_tag}"
-        json_output = write_ranked_papers_to_json(db, json_output, model, nl_query, ranked_papers)
+        json_output = write_papers_to_json(db, json_output, ranked_papers, model_used=model, nl_query=nl_query)
         logger.info(f"Results saved to '{json_output}'")
     else:
         # pretty print results

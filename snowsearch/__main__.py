@@ -1,7 +1,6 @@
 import asyncio
 import csv
 from argparse import Namespace
-from os import path
 from pathlib import Path
 from typing import List
 
@@ -14,8 +13,8 @@ from cli.search import run_search
 from cli.slr import run_slr
 from cli.snowball import run_snowball
 from cli.upload import run_upload
+from config.parser import Config
 from db.paper_database import PaperDatabase
-from util.config_parser import Config
 from util.logger import logger, Level
 
 """
@@ -78,7 +77,8 @@ async def _execute(db: PaperDatabase, args: Namespace) -> None:
                        only_open_access=args.only_open_access,
                        only_processed=args.only_processed,
                        min_similarity_score=args.min_similarity_score,
-                       order_by_abstract=args.order_by_abstract)
+                       order_by_abstract=args.order_by_abstract,
+                       json_output=args.json)
 
         case 'inspect':
             run_inspect(db, args.paper_title)
@@ -101,8 +101,10 @@ async def _execute(db: PaperDatabase, args: Namespace) -> None:
                            paper_titles_to_rank=papers)
         case 'upload':
             # set file paths
-            paper_pdf_paths = [args.file] if args.file else [str(f) for f in Path(args.directory).iterdir() if f.is_file()]
+            paper_pdf_paths = [args.file] if args.file else [str(f) for f in Path(args.directory).iterdir() if
+                                                             f.is_file()]
             await run_upload(db, Config(args.config), paper_pdf_paths)
+
 
 def main() -> None:
     """

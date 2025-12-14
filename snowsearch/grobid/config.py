@@ -9,8 +9,6 @@ Description: Defaults for Grobid
 DEFAULT_HOST = "localhost"
 DEFAULT_PORT = 8070
 
-GROBID_SERVER_ENV = "GROBID_SERVER"
-
 MAX_GROBID_REQUESTS = 1
 # download details
 MAX_CONCURRENT_DOWNLOADS = 10

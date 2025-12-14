@@ -1,17 +1,18 @@
 # Options for snowballing technique
-# REQUIRED
 snowball:
   # Upper limit for the number of papers to initially start with to download from OpenAlex and get citations for
-  # Leave blank for no upper limit
-  seed_paper_limit: 10
+  # Remove key for no upper limit
+  # Default: 10
+  seed_paper_limit: ''
 
   # Number of rounds of snowballing to do
-  # REQUIRED
-  rounds: 3
+  # Default: 5
+  rounds: ''
 
   # For each round, the number of papers to snowball (fetch citation details for)
-  # Leave blank for no upper limit
-  round_quota: 5
+  # Remove key for no upper limit
+  # Default: 10
+  round_quota: ''
 
   # Minimum similarity score between the natural language query and title / abstract.
   # Must be [-1,1], but 0.4 is recommended.
@@ -19,79 +20,27 @@ snowball:
   # Decreasing will increase the number of valid papers, potentially adding a lot of noise to the pool
   # It is recommended to keep this value somewhat low to cast a wide net, after which the score can be
   # increased when ranking papers
-  # REQUIRED
-  min_similarity_score: .4
-
-# Options for generating Elastic search query for OpenAlex
-# REQUIRED
-query_generation:
-  # LLM Options
-  agent:
-    # Host of an ollama server, will default to 'localhost'
-    # Useful if ollama server is not running locally, ie running on a remote host with more resources available
-    # Superseded by the OLLAMA_HOST env variable
-    # Ignored if the OPENAI_API_KEY env variable is set, in which case the OpenAI API is used
-    # ollama_host:
-
-    # Port of an ollama server, will default to '11434'
-    # Useful if ollama server is not running locally, ie running on a remote host with more resources available
-    # Superseded by the OLLAMA_PORT env variable
-    # Ignored if the OPENAI_API_KEY env variable is set, in which case the OpenAI API is used
-    # ollama_port:
-
-    # Model to use for parsing natural language paper search into findpapers syntax
-    # If using ollama (default), search for desired models here: https://ollama.com/search
-    # If using OpenAI, search for desired models here: https://platform.openai.com/docs/models
-    # REQUIRED
-    model: llama3
-
-    # If using ollama, specify a tag model to use, will default to 'latest'
-    tag: 8b
+  # Default: 0.4
+  min_similarity_score: ''
 
 # Options for ranking papers
-# REQUIRED
 abstract_ranking:
-  # LLM Options
-  agent:
-    # Host of an ollama server, will default to 'localhost'
-    # Useful if ollama server is not running locally, ie running on a remote host with more resources available
-    # Superseded by the OLLAMA_HOST env variable
-    # Ignored if the OPENAI_API_KEY env variable is set, in which case the OpenAI API is used
-    # ollama_host:
 
-    # Port of an ollama server, will default to '11434'
-    # Useful if ollama server is not running locally, ie running on a remote host with more resources available
-    # Superseded by the OLLAMA_PORT env variable
-    # Ignored if the OPENAI_API_KEY env variable is set, in which case the OpenAI API is used
-    # ollama_port:
-
-    # Model to use for parsing natural language paper search into findpapers syntax
-    # If using ollama (default), search for desired models here: https://ollama.com/search
-    # If using OpenAI, search for desired models here: https://platform.openai.com/docs/models
-    # REQUIRED
-    model: llama3
-
-    # If using ollama, specify a tag model to use, will default to 'latest'
-    tag: 8b
-
-  # Context window of selected model
-  # REQUIRED
-  context_window: 8000
-
-  # Average tokens per word, will default to 1.2
-  # tokens_per_word:
+  # Average tokens per word
+  # Default: 1.2
+  tokens_per_word: ''
 
   # Minimum similarity score between the prompt and abstract, must be [-1,1], but 0.4 recommended
   # Lowering this value will increase the number of papers included in the LLM ranking
   # It is recommended to keep this value relatively high so rounds aren't wasted on irrelevant papers
-  # REQUIRED
-  min_abstract_score: .6
+  # Default: 0.6
+  min_abstract_score: ''
 
   # Number of papers to rank
   # All abstracts will need to fit inside context window for final ranking.
   # For reference, 1 abstract ~= 250 - 500 tokens
-  # REQUIRED
-  top_n_papers: 10
+  # Default: 10
+  top_n_papers: ''
 
 # Config for OpenAlex API
 # https://docs.openalex.org/
@@ -99,7 +48,8 @@ openalex:
   # Optional email to use for 'polite pool' for better access
   # Queries are 10x faster if an email is provided
   # https://docs.openalex.org/how-to-use-the-api/rate-limits-and-authentication#the-polite-pool
-  # email:
+  # (env: SS_OA_EMAIL)
+  email: ''
 
 # Config for Grobid
 # https://github.com/kermitt2/grobid
@@ -107,23 +57,24 @@ grobid:
   # Config for grobid python client
   # https://github.com/kermitt2/grobid-client-python?tab=readme-ov-file#default-configuration
   client_config:
-    # Host and port of a grobid server, will default to 'localhost:8070'
+    # Host and port of a grobid server
     # Useful if grobid server is not running locally, ie running on a remote host with more resources available
-    # Superseded by the GROBID_SERVER env variable
-    # grobid_server:
+    # Default: localhost:8070
+    # (env: SS_GROBID_SERVER)
+    grobid_server: ''
 
     # Thread pool size.
     # Tune carefully: a large batch size will result in the data being written less frequently
-    # Default is 1000
-    # batch_size:
+    # Default: 1000
+    batch_size: ''
 
     # Wait time when server is busy (seconds)
-    # Default is 5
-    # sleep_time:
+    # Default: 5
+    sleep_time: ''
 
     # Client-side timeout (seconds)
-    # Default is 180
-    # timeout:
+    # Default: 180
+    timeout: ''
 
     # List of TEI XML elements for which GROBID should extract coordinates (bounding boxes), ie x y location in pdf.
     # Defaults are
@@ -133,16 +84,48 @@ grobid:
     # - biblStruct
     # - formula
     # - s
-    # coordinates:
+    coordinates: ''
 
   # Max number of requests allowed to be made to the grobid server at a time
-  # Default is 1
-  # max_grobid_requests:
+  # Default: 1
+  max_grobid_requests: ''
 
   # Max number of PDFs to allowed to download at the same time
-  # Default is 10
-  # max_concurrent_downloads:
+  # Default: 10
+  max_concurrent_downloads: ''
 
   # Max number of PDFs to be downloaded locally at one time
-  # Default is 100
-  # max_local_pdfs:
+  # Default: 100
+  max_local_pdfs: ''
+
+# Config for Ollama Server
+# Ignored if the OPENAI_API_KEY env variable is set, in which case the OpenAI API is used
+ollama:
+  # Useful if ollama server is not running locally, ie running on a remote host with more resources available
+  # Default: localhost
+  # (env: SS_OLLAMA_HOST)
+  ollama_host: ''
+
+  # Useful if ollama server is not running locally, ie running on a remote host with more resources available
+  # Default: 11434
+  # (env: SS_OLLAMA_PORT)
+  ollama_port: ''
+
+# Config for lLM
+agent:
+    # Model to use for generating queries and ranking abstracts
+    # If using ollama (default), search for desired models here: https://ollama.com/search
+    # If using OpenAI, search for desired models here: https://platform.openai.com/docs/models
+    # Default: llama3
+    # (env: SS_AGENT_MODEL)
+    model_name: ''
+
+    # If using ollama, specify a tag model to use
+    # Default: latest
+    # (env: SS_AGENT_TAG)
+    model_tag: ''
+
+    # Context window of selected model
+    # Default: 5000 - conservative estimate
+    # (env: SS_AGENT_CONTEXT_WINDOW)
+    context_window: ''
