@@ -1,7 +1,9 @@
 import asyncio
 import logging
+import os
 from asyncio import Semaphore
 from datetime import datetime
+from os.path import exists
 from tempfile import NamedTemporaryFile, TemporaryDirectory
 from typing import List, Dict, Any
 
@@ -44,7 +46,9 @@ class GrobidWorker:
         :param client_config: Optional Grobid client details (Default: None)
         """
         # init with params if provided
+        logger.debug_msg("Attempting to access Grobid server")
         self._grobid_client = GrobidClient(**client_config) if client_config else GrobidClient()
+        logger.debug_msg("Connected Successfully")
         # set semaphore limits
         self._grobid_semaphore = Semaphore(max_grobid_requests)
         self._download_semaphore = Semaphore(max_concurrent_downloads)
@@ -145,13 +149,20 @@ class GrobidWorker:
         :raises GrobidProcessError: If grobid fails to process the file
         :return: DTO with paper title, abstract, and list of citations
         """
-        with NamedTemporaryFile(dir=work_dir, prefix="grobid-", suffix=".pdf") as tmp_pdf:
-            # limit number of downloaded pdfs
-            async with self._pdf_file_semaphore:
-                # attempt to download paper with retry logic
-                await self._download_pdf(session, title, pdf_url, tmp_pdf.name)
-                # process paper
-                return await self.process_paper(tmp_pdf.name, title)
+        tmp_pdf = ""
+        try:
+            with NamedTemporaryFile(dir=work_dir, prefix="grobid-", suffix=".pdf", delete=False) as tmp_pdf:
+                # todo - change to download n papers successfully, then send all to grobid to process?
+                # limit number of downloaded pdfs
+                async with self._pdf_file_semaphore:
+                    # attempt to download paper with retry logic
+                    await self._download_pdf(session, title, pdf_url, tmp_pdf.name)
+                    # process paper
+                    return await self.process_paper(tmp_pdf.name, title)
+        finally:
+            # delete file to support windows
+            if tmp_pdf and exists(tmp_pdf.name):
+                os.remove(tmp_pdf.name)
 
     async def enrich_papers(self, paper_db: PaperDatabase, papers: List[PaperDTO]) -> int:
         """
