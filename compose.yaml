@@ -22,9 +22,6 @@ services:
   abstract_db:
     image: neo4j:5.26.13
     container_name: abstract_db
-    env_file:
-      - path: .env
-        required: true
     # default values
     # TODO - remove public access
     ports:
