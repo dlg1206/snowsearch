@@ -58,10 +58,6 @@ class RankingConfigDTO:
         if self.tokens_per_word and self.tokens_per_word <= 0:
             raise ValueError("A word must have a positive token count")
 
-    @property
-    def context_window(self) -> int:
-        return self.agent_config.context_window
-
 
 @dataclass
 class OpenAlexConfigDTO:
@@ -117,6 +113,7 @@ class SnowballConfigDTO:
 
         if self.round_quota and self.round_quota < 1:
             raise ValueError("Each snowball round needs at least 1 paper")
+
 
 class Config:
 

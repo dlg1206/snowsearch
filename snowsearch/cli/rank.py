@@ -31,11 +31,9 @@ async def rank_papers(rank_config: RankingConfigDTO, nl_query: str, papers: List
     :return: Ordered list of papers that best match the nl_query
     """
     # init ranker client
-    abstract_model = OpenAIClient(rank_config.agent_config.model_name) if os.getenv(OPENAI_API_KEY_ENV) \
-        else OllamaClient(**asdict(rank_config.agent_config))
-    ranker = AbstractRanker(abstract_model,
-                            rank_config.context_window,
-                            rank_config.tokens_per_word)
+    abstract_model = OpenAIClient(rank_config.agent_config.model_name, rank_config.agent_config.context_window) \
+        if os.getenv(OPENAI_API_KEY_ENV) else OllamaClient(**asdict(rank_config.agent_config))
+    ranker = AbstractRanker(abstract_model, rank_config.tokens_per_word)
 
     # rank papers
     return await ranker.rank_paper_abstracts(nl_query, papers)

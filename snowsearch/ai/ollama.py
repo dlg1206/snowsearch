@@ -59,19 +59,21 @@ class UnknownOllamaModelError(Exception):
 
 class OllamaClient(ModelClient):
 
-    def __init__(self, ollama_host: str, ollama_port: int, model_name: str, model_tag: str = "latest"):
+    def __init__(self, ollama_host: str, ollama_port: int, context_window: int, model_name: str, model_tag: str = "latest"):
         """
         Create new Ollama Client
         Configured for 1 client 1 model
 
         :param ollama_host: Host of ollama server
         :param ollama_port: Host of ollama port
+        :param context_window: Context window of the model
         :param model_name: Name of model to use
         :param model_tag: Optional model tag (default: latest)
         """
         logger.debug_msg("Using ollama client")
         super().__init__(
             model=f"{model_name}:{model_tag if model_tag else 'latest'}",
+            context_window=context_window,
             api_key="ollama",
             base_url=f"http://{ollama_host}:{ollama_port}/v1"
         )

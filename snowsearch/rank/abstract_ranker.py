@@ -24,15 +24,11 @@ Description: Rank papers based on the relevance of their abstracts
 
 class AbstractRanker:
 
-    def __init__(self,
-                 model_client: ModelClient,
-                 context_window: int,
-                 tokens_per_word: float = AVG_TOKEN_PER_WORD):
+    def __init__(self, model_client: ModelClient, tokens_per_word: float = AVG_TOKEN_PER_WORD):
         """
         Create new Abstract ranker
 
         :param model_client: Client to use for ranking abstracts
-        :param context_window: Context window of the model
         :param tokens_per_word: Average tokens per word to use for window estimation
         """
         self._model_client = model_client
@@ -43,7 +39,7 @@ class AbstractRanker:
             self._rank_context = f.read()
 
         # reserve tokens for one-shot
-        self._context_window_budget = context_window - math.ceil(
+        self._context_window_budget = model_client.context_window - math.ceil(
             self._estimate_tokens(self._rank_context) * TOKEN_BUFFER_MODIFIER)
 
     def _estimate_tokens(self, text: str) -> int:

@@ -25,19 +25,20 @@ class InvalidAPIKeyError(Exception):
 
 class OpenAIClient(ModelClient):
 
-    def __init__(self, model_name: str):
+    def __init__(self, model_name: str, context_window: int):
         """
         Create new Openai Client for use with OpenAI api like gpt
         Configured for 1 client 1 model
 
         :param model_name: Name of model to use
+        :param context_window: Context window of model
         :raises EnvironmentError: If the 'OPENAI_API_KEY' env var is not defined
         """
         logger.debug_msg("Using openai client")
         # ensure openapi key is present
         if not os.getenv('OPENAI_API_KEY'):
             raise EnvironmentError("Missing API key in environment variable: OPENAI_API_KEY")
-        super().__init__(model=model_name, api_key=os.getenv('OPENAI_API_KEY'))
+        super().__init__(model=model_name, context_window=context_window, api_key=os.getenv('OPENAI_API_KEY'))
 
         # validate key
         self._verify_api_key()

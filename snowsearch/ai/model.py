@@ -18,15 +18,17 @@ Description: Generic model client for connecting and authenticating with an Open
 
 class ModelClient(ABC):
 
-    def __init__(self, model: str, api_key: str, base_url: str = None):
+    def __init__(self, model: str, context_window: int, api_key: str, base_url: str = None):
         """
         Initialize connection to OpenAI compatible server
 
         :param model: Model to use
+        :param context_window: Context window of model
         :param api_key: API key to use
         :param base_url: Optional url of server (Default: assumes openai)
         """
         self._model = model
+        self._context_window = context_window
 
         params = {'api_key': api_key}
         # for ollama server
@@ -51,3 +53,7 @@ class ModelClient(ABC):
     @property
     def model(self) -> str:
         return self._model
+
+    @property
+    def context_window(self) -> int:
+        return self._context_window
