@@ -59,7 +59,7 @@ grobid:
   client_config:
     # Host and port of a grobid server
     # Useful if grobid server is not running locally, ie running on a remote host with more resources available
-    # Default: localhost:8070
+    # Default: http://localhost:8070
     # (env: SS_GROBID_SERVER)
     grobid_server: ''
 
