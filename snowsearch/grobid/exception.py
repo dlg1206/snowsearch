@@ -7,6 +7,10 @@ Description: Exceptions for Grobid
 
 
 class InvalidFileFormatError(Exception):
+    """
+    File is not a PDF
+    """
+
     def __init__(self, paper_title: str, pdf_url: str):
         """
         File is not a PDF
@@ -20,14 +24,24 @@ class InvalidFileFormatError(Exception):
 
     @property
     def paper_title(self) -> str:
+        """
+        :return: Paper title
+        """
         return self._paper_title
 
     @property
     def pdf_url(self) -> str:
+        """
+        :return: PDF url
+        """
         return self._pdf_url
 
 
 class NoFileDataError(Exception):
+    """
+    No data to read from the url
+    """
+
     def __init__(self, paper_title: str, pdf_url: str):
         """
         No data to read from the url
@@ -41,14 +55,24 @@ class NoFileDataError(Exception):
 
     @property
     def paper_title(self) -> str:
+        """
+        :return: Paper title
+        """
         return self._paper_title
 
     @property
     def pdf_url(self) -> str:
+        """
+        :return: PDF url
+        """
         return self._pdf_url
 
 
 class PaperDownloadError(Exception):
+    """
+    Failed to download paper
+    """
+
     def __init__(self, paper_title: str, status_code: int, error_msg: str, pdf_url: str):
         """
         Create new failure error
@@ -66,18 +90,31 @@ class PaperDownloadError(Exception):
 
     @property
     def paper_title(self) -> str:
+        """
+        :return: Paper title
+        """
         return self._paper_title
 
     @property
     def status_code(self) -> int:
+        """
+        :return: HTTP status code
+        """
         return self._status_code
 
     @property
     def error_msg(self) -> str:
+        """
+        :return: Error Message
+        """
         return self._error_msg
 
 
 class GrobidProcessError(Exception):
+    """
+    Failed to process paper with grobid
+    """
+
     def __init__(self, paper_title: str, status_code: int, error_msg: str):
         """
         Create new failure error
@@ -93,12 +130,21 @@ class GrobidProcessError(Exception):
 
     @property
     def paper_title(self) -> str:
+        """
+        :return: Paper title
+        """
         return self._paper_title
 
     @property
     def status_code(self) -> int:
+        """
+        :return: HTTP status code
+        """
         return self._status_code
 
     @property
     def error_msg(self) -> str:
+        """
+        :return: Error Message
+        """
         return self._error_msg

@@ -1,3 +1,11 @@
+"""
+File: __main__.py
+
+Description: Entry for interacting with snowball
+
+@author Derek Garcia
+"""
+
 import asyncio
 import csv
 from argparse import Namespace
@@ -17,15 +25,6 @@ from cli.upload import run_upload
 from config.parser import Config, DEFAULT_CONFIG_PATH
 from db.paper_database import PaperDatabase
 from util.logger import logger, Level
-
-"""
-File: __main__.py
-
-Description: Entry for interacting with snowball
-
-@author Derek Garcia
-"""
-
 
 async def _execute(db: PaperDatabase, config: Config, args: Namespace) -> None:
     """
@@ -95,9 +94,13 @@ async def _execute(db: PaperDatabase, config: Config, args: Namespace) -> None:
                 papers = list(set(args.papers))
 
             # start rank
+            top_n_papers = args.limit or rank_config.top_n_papers  # use config as fallback
+            min_score = rank_config.min_abstract_score if args.min_similarity_score is None \
+                else args.min_similarity_score
+
             await run_rank(db, rank_config, args.semantic_search,
-                           rank_config.top_n_papers if args.limit is None else args.limit,
-                           rank_config.min_abstract_score if args.min_similarity_score is None else args.min_similarity_score,
+                           top_n_papers,
+                           min_score,
                            json_output=args.json,
                            paper_titles_to_rank=papers)
         case 'upload':

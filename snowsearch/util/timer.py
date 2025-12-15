@@ -1,5 +1,3 @@
-import time
-
 """
 File: timer.py
 
@@ -7,9 +5,14 @@ Description: Util timer for tracking duration
 
 @author Derek Garcia
 """
+import time
 
 
 class Timer:
+    """
+    Timer
+    """
+
     def __init__(self, start: bool = True):
         """
         Create new timer
@@ -73,4 +76,4 @@ def format_time(elapsed_seconds: float) -> str:
     """
     hours, remainder = divmod(int(elapsed_seconds), 3600)
     minutes, seconds = divmod(remainder, 60)
-    return "{:02}:{:02}:{:02}".format(hours, minutes, seconds)
+    return f"{hours:02}:{minutes:02}:{seconds:02}"

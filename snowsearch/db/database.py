@@ -1,3 +1,10 @@
+"""
+File: database.py
+Description: neo4j database interface
+
+@author Derek Garcia
+"""
+
 import logging
 import os
 import time
@@ -9,13 +16,6 @@ from neo4j.exceptions import ConstraintError, TransientError
 from db import _NODE_SCHEMA
 from db.entity import Node, Relationship, NodeType
 from util.logger import logger
-
-"""
-File: database.py
-Description: neo4j database interface for handling threat actor data
-
-@author Derek Garcia
-"""
 
 # Mute Neo4j driver logs
 logging.getLogger("neo4j").setLevel(logging.CRITICAL)
@@ -152,7 +152,8 @@ class Neo4jDatabase(ABC):
         set_clause = ", ".join(set_expressions)
 
         # construct the final query
-        query = f"{query} ON CREATE SET {set_clause} ON MATCH SET {set_clause}" if update else f"{query} SET {set_clause}"
+        query = f"{query} ON CREATE SET {set_clause} ON MATCH SET {set_clause}" \
+            if update else f"{query} SET {set_clause}"
 
         # execute query
         for attempt in range(MAX_ATTEMPTS):
@@ -168,6 +169,7 @@ class Neo4jDatabase(ABC):
                     time.sleep(0.1 * (attempt + 1))  # backoff
                 else:
                     raise  # re-raise other transient errors
+        return False
 
     def insert_relationship(self, start_node: Node, relationship: Relationship, end_node: Node) -> None:
         """

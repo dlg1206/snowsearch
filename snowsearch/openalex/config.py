@@ -1,11 +1,11 @@
-import re
-
 """
 File: config.py
 Description: Defaults for OpenAlex
 
 @author Derek Garcia
 """
+
+import re
 
 # https://docs.openalex.org/api-guide-for-llms#rate-limiting-best-practices
 # 1 requests per second

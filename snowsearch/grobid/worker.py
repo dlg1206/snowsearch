@@ -1,3 +1,10 @@
+"""
+File: worker.py
+Description: Grobid worker that handles downloading and processing open access papers
+
+@author Derek Garcia
+"""
+
 import asyncio
 import logging
 import os
@@ -20,18 +27,15 @@ from grobid.exception import PaperDownloadError, GrobidProcessError, NoFileDataE
 from util.logger import logger
 from util.timer import Timer
 
-"""
-File: worker.py
-Description: Grobid worker that handles downloading and processing open access papers
-
-@author Derek Garcia
-"""
-
 # Mute grobid client logs
 logging.getLogger("grobid_client").setLevel(logging.CRITICAL)  # todo doesn't work
 
 
 class GrobidWorker:
+    """
+    Client for interacting with Grobid and processing papers
+    """
+
     def __init__(self,
                  max_grobid_requests: int = MAX_GROBID_REQUESTS,
                  max_concurrent_downloads: int = MAX_CONCURRENT_DOWNLOADS,
@@ -40,7 +44,7 @@ class GrobidWorker:
         """
         Create new Grobid worker to download and process urls
 
-        :param max_grobid_requests: Max number of requests allowed to be made to the grobid server at a time (Default: 1)
+        :param max_grobid_requests: Max number of requests allowed to be made to the grobid server at once (Default: 1)
         :param max_concurrent_downloads: Max number of PDFs to allowed to download at the same time (Default: 10)
         :param max_local_pdfs: Max number of PDFs to be downloaded locally at one time (Default: 100)
         :param client_config: Optional Grobid client details (Default: None)
@@ -229,11 +233,22 @@ class GrobidWorker:
 
         # report results
         if len(papers):
-            percent = lambda a, b: f"{(a / b) * 100:.01f}%"
-            logger.info(
-                f"Processing complete, successfully downloaded and processed {num_success} papers ({percent(num_success, len(papers))})")
+            def __percent(a: int, b: int) -> str:
+                """
+                Format a percent
+
+                :param a: Numerator
+                :param b: Denominator
+                :return: Formated percent
+                """
+                return f"{(a / b) * 100:.01f}%"
+
+            logger.info(f"Processing complete, successfully downloaded and processed "
+                        f"{num_success} papers ({__percent(num_success, len(papers))})")
             logger.debug_msg(f"Found {len(unique_citations)} citations")
             logger.debug_msg(
-                f"Failed to download {num_fail_download} papers ({percent(num_fail_download, len(papers))})")
-            logger.debug_msg(f"Failed to process {num_fail_process} papers ({percent(num_fail_process, len(papers))})")
+                f"Failed to download {num_fail_download} papers ({__percent(num_fail_download, len(papers))})")
+            logger.debug_msg(f"Failed to process {num_fail_process} papers "
+                             f"({__percent(num_fail_process, len(papers))})")
+
         return num_success

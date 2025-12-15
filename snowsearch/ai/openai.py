@@ -1,10 +1,3 @@
-import os
-
-from openai import AuthenticationError
-
-from ai.model import ModelClient
-from util.logger import logger
-
 """
 File: openai.py
 
@@ -13,9 +6,21 @@ Description: Base client for interacting with OpenAI API like GPT
 @author Derek Garcia
 """
 
+import os
+
+from openai import AuthenticationError
+
+from ai.model import ModelClient
+from util.logger import logger
+
 OPENAI_API_KEY_ENV = "OPENAI_API_KEY"
 
+
 class InvalidAPIKeyError(Exception):
+    """
+    Failed to validate OpenAI API key
+    """
+
     def __init__(self):
         """
         Failed to validate OpenAI API key
@@ -24,6 +29,9 @@ class InvalidAPIKeyError(Exception):
 
 
 class OpenAIClient(ModelClient):
+    """
+    Interface for using OpenAI API
+    """
 
     def __init__(self, model_name: str, context_window: int):
         """

@@ -1,3 +1,11 @@
+"""
+File: abstract_ranker.py
+
+Description: Rank papers based on the relevance of their abstracts
+
+@author Derek Garcia
+"""
+
 import asyncio
 import contextlib
 import json
@@ -13,16 +21,11 @@ from rank.exception import ExceedMaxRankingGenerationAttemptsError
 from util.logger import logger
 from util.timer import Timer
 
-"""
-File: abstract_ranker.py
-
-Description: Rank papers based on the relevance of their abstracts
-
-@author Derek Garcia
-"""
-
 
 class AbstractRanker:
+    """
+    Ranker that uses an LLM to rank abstracts
+    """
 
     def __init__(self, model_client: ModelClient, tokens_per_word: float = AVG_TOKEN_PER_WORD):
         """
@@ -86,17 +89,16 @@ class AbstractRanker:
         # error if exceed retries
         for attempt in range(0, MAX_RETRIES):
             logger.debug_msg(f"Ranking attempt {attempt + 1}/{MAX_RETRIES}")
-            completion, timer = await self._model_client.prompt(
+            completion, _ = await self._model_client.prompt(
                 messages=[
                     {"role": "system", "content": context},
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0
             )
-            '''
-            Attempt to extract the ranking from the response. 
-            This is to safeguard against wordy and descriptive replies 
-            '''
+
+            # Attempt to extract the ranking from the response.
+            # This is to safeguard against wordy and descriptive replies
             try:
                 results = json.loads(completion.choices[0].message.content.strip())
                 # convert back to dtos in order

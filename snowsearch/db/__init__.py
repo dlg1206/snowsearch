@@ -1,13 +1,13 @@
-import os
-
-import yaml
-
 """
 File: __init__.py
-Description: 
+Description:
 
 @author Derek Garcia
 """
+
+import os
+
+import yaml
 
 # Load the schema.yaml file when db is imported
 # todo - not hardcoded path

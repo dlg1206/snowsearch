@@ -1,10 +1,3 @@
-import hashlib
-from abc import ABC
-from enum import Enum
-from typing import List, Set, Dict, Any
-
-from db import _NODE_SCHEMA, _RELATIONSHIP_SCHEMA
-
 """
 File: entity.py
 Description: Node construction and generation from yaml schema
@@ -12,8 +5,18 @@ Description: Node construction and generation from yaml schema
 @author Derek Garcia
 """
 
+import hashlib
+from abc import ABC
+from enum import Enum
+from typing import List, Set, Dict, Any
+
+from db import _NODE_SCHEMA, _RELATIONSHIP_SCHEMA
+
 
 class NodeType(Enum):
+    """
+    Enum representation of a node in the database
+    """
     PAPER = "Paper"
     RUN = "Run"
 
@@ -35,6 +38,9 @@ class NodeType(Enum):
 
 
 class RelationshipType(Enum):
+    """
+    Enum representing a relationship in the database
+    """
     ADDED = "ADDED"
     REFERENCES = "REFERENCES"
 
@@ -90,7 +96,8 @@ class MissingRequiredPropertyKeyError(KeyError):
         if len(missing_keys) == 1:
             message = f"'{missing_keys[0]}' required key is missing for entity '{entity.value}'"
         else:
-            message = f"{', '.join(f"'{k}'" for k in missing_keys)} are required keys are missing for entity '{entity.value}'"
+            key_str = ', '.join(f"'{k}'" for k in missing_keys)
+            message = f"{key_str} are required keys are missing for entity '{entity.value}'"
 
         super().__init__(message)
 
@@ -138,11 +145,22 @@ class InvalidRelationshipError(ValueError):
         :param end_node: Attempted end node
         """
         super().__init__(
-            f"'{start_node.value}' does not have relationship type of type '{relationship.value}' to node '{end_node.value}'")
+            f"'{start_node.value}' does not have relationship type of type "
+            f"'{relationship.value}' to node '{end_node.value}'")
 
 
 class Entity(ABC):
+    """
+    Generic object in the database
+    """
+
     def __init__(self, entity_type: NodeType | RelationshipType, properties: Dict[str, Any]):
+        """
+        Create new entity
+
+        :param entity_type: Type of entity
+        :param properties: Properties of the entity
+        """
         if isinstance(entity_type, NodeType):
             entity_schema = _NODE_SCHEMA.get(entity_type.value)
         else:
@@ -176,23 +194,45 @@ class Entity(ABC):
 
     @property
     def match_id(self):
+        """
+        :return: Pseudo uid of this entity
+        """
         return self._match_id
 
     @property
     def type(self):
+        """
+        :return: NodeType
+        """
         return self._type
 
     @property
     def required_properties(self):
+        """
+        :return: Required properties of the entity
+        """
         return self._required_properties
 
     @property
     def properties(self):
+        """
+        :return: Properties of the entity
+        """
         return self._properties
 
 
 class Relationship(Entity):
+    """
+    Relationship entity
+    """
+
     def __init__(self, relationship_type: RelationshipType, properties: Dict[str, Any]):
+        """
+        Create a new relationship
+
+        :param relationship_type: Type of relationship
+        :param properties: Properties of the relationship
+        """
         super().__init__(relationship_type, properties)
         # save the inverse if one is defined
         entity_schema = _RELATIONSHIP_SCHEMA.get(relationship_type.value, {})
@@ -221,10 +261,17 @@ class Relationship(Entity):
 
     @property
     def inverse_rel_type(self):
+        """
+        :return: The inverse relationship
+        """
         return self._inverse_rel_type
 
 
 class Node(Entity):
+    """
+    Node entity
+    """
+
     def __init__(self, node_type: NodeType, properties: Dict[str, Any]):
         """
         Create new instance of a node with properties

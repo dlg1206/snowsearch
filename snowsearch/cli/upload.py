@@ -1,3 +1,11 @@
+"""
+File: upload.py
+
+Description: Upload local pdf papers to be stored in the database
+
+@author Derek Garcia
+"""
+
 from typing import List
 
 from config.parser import Config
@@ -10,14 +18,6 @@ from openalex.client import OpenAlexClient
 from util.logger import logger
 from util.timer import Timer
 from util.verify import validate_file_is_pdf
-
-"""
-File: upload.py
-
-Description: Upload local pdf papers to be stored in the database
-
-@author Derek Garcia
-"""
 
 
 async def run_upload(db: PaperDatabase, config: Config, paper_pdf_paths: List[str]) -> None:
@@ -39,7 +39,7 @@ async def run_upload(db: PaperDatabase, config: Config, paper_pdf_paths: List[st
 
     # error if nothing to process
     if not valid_paper_files:
-        raise Exception("No valid pdfs to upload")
+        raise ValueError("No valid pdfs to upload")
 
     # init grobid client
     grobid_worker = GrobidWorker(
