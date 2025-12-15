@@ -1,6 +1,5 @@
 from argparse import ArgumentParser
 
-from config.parser import DEFAULT_CONFIG_PATH
 from util.logger import Level, DEFAULT_LOG_LEVEL
 
 """
@@ -264,9 +263,7 @@ def create_parser() -> ArgumentParser:
     config = parser.add_argument_group("Configuration")
     config.add_argument('-c', '--config',
                         metavar="<path to config file>",
-                        nargs='?',
-                        help=f"Path to config file to use (Default: {DEFAULT_CONFIG_PATH})",
-                        const=DEFAULT_CONFIG_PATH)
+                        help=f"Path to config file to use")
 
     # logging flags
     logging = parser.add_argument_group("Logging")

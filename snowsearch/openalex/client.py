@@ -11,9 +11,9 @@ from yarl import URL
 from ai.model import ModelClient
 from db.config import DOI_PREFIX
 from db.paper_database import PaperDatabase
+from dto.paper_dto import PaperDTO
 from openalex.config import POLITE_RATE_LIMIT_SLEEP, DEFAULT_RATE_LIMIT_SLEEP, MAX_PER_PAGE, OPENALEX_BASE, \
     QUERY_JSON_RE, MAX_RETRIES, NL_TO_QUERY_CONTEXT_FILE, MAX_DOI_PER_PAGE
-from dto.paper_dto import PaperDTO
 from openalex.exception import MissingOpenAlexEntryError, ExceedMaxQueryGenerationAttemptsError
 from util.logger import logger
 
@@ -46,7 +46,7 @@ class OpenAlexClient:
             self._api_key_available = True
             logger.info("Found OpenAlex API key")
         # load content for one-shot
-        with open(NL_TO_QUERY_CONTEXT_FILE, 'r') as f:
+        with open(NL_TO_QUERY_CONTEXT_FILE, 'r', encoding='utf-8') as f:
             self._nl_to_query_context = f.read()
 
     def _add_auth(self, params_obj: Dict[str, str | int]) -> None:
@@ -106,7 +106,8 @@ class OpenAlexClient:
         result = await self._fetch(session, "works", params)
         # parse findings
         return result['meta']['next_cursor'], [
-            PaperDTO(p.get('title') if p.get('title') else f"MISSING_TITLE_{hashlib.md5(p['id'].encode("utf-8")).hexdigest()[:5]}",
+            PaperDTO(p.get('title') if p.get(
+                'title') else f"MISSING_TITLE_{hashlib.md5(p['id'].encode("utf-8")).hexdigest()[:5]}",
                      publication_year=p['publication_year'],
                      publication_date=p['publication_date'],
                      openalex_url=p['id'],
@@ -148,9 +149,9 @@ class OpenAlexClient:
                              openalex_url=p['id'],
                              doi=p['doi'],
                              is_open_access=bool(p['open_access']['is_oa']),
-                             pdf_url=p['open_access']['oa_url'])
+                             pdf_url=p['primary_location']['pdf_url'])
             papers.append(paper)
-            missing_doi_ids.discard(paper.doi)
+            missing_doi_ids.discard(paper.doi.lower())
             logger.debug_msg(f"Found '{paper.id}' by doi")
 
         return papers, list(missing_doi_ids)
@@ -182,20 +183,24 @@ class OpenAlexClient:
                         openalex_url=paper['id'],
                         doi=paper['doi'],
                         is_open_access=bool(paper['open_access']['is_oa']),
-                        pdf_url=paper['open_access']['oa_url'])
+                        pdf_url=paper['primary_location']['pdf_url'])
 
-    async def search_and_save_metadata(self, run_id: int, paper_db: PaperDatabase, oa_query: str) -> None:
+    async def search_and_save_metadata(self, run_id: int, paper_db: PaperDatabase, oa_query: str) -> int:
         """
         Fetch paper metadata from OpenAlex based on a query and save to database
 
         :param run_id: ID of current run
         :param paper_db: Database to save papers to
         :param oa_query: OpenAlex query string to use
+        :return: The number of hits found
         """
         oa_query = oa_query.replace("'", '"')
         async with ClientSession() as session:
             hits = await self._fetch_paper_count(session, oa_query)
             logger.debug_msg(f"Found {hits} papers in OpenAlex")
+            # exit early if no hits
+            if not hits:
+                return 0
             progress = logger.get_data_queue(hits, "Querying OpenAlex Database", "paper")
             # fetch all papers
             next_cursor = "*"
@@ -226,6 +231,8 @@ class OpenAlexClient:
         if isinstance(progress, TQDM):
             progress.close()
 
+        return hits
+
     async def fetch_and_save_paper_metadata(self,
                                             paper_db: PaperDatabase,
                                             papers: List[PaperDTO],
@@ -249,8 +256,8 @@ class OpenAlexClient:
         titles: List[PaperDTO] = []
         for c in papers:
             if c.doi:
-                doi_and_title.append(c.doi)
-                doi_reverse_lookup[c.doi] = c
+                doi_and_title.append(c.doi.lower())
+                doi_reverse_lookup[c.doi.lower()] = c
             else:
                 titles.append(c)
         doi_chunks = [doi_and_title[i:i + MAX_DOI_PER_PAGE] for i in range(0, len(doi_and_title), MAX_DOI_PER_PAGE)]
@@ -340,7 +347,6 @@ class OpenAlexClient:
                 logger.warn("Failed to generate OpenAlex query, retrying. . .")
         # error if exceed retries
         raise ExceedMaxQueryGenerationAttemptsError(model_client.model)
-
 
 
 async def _fetch_doi_batch_wrapper(semaphore: Semaphore, callback) -> Tuple[List[PaperDTO], List[str]]:

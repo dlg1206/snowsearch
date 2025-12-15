@@ -1,6 +1,7 @@
 import asyncio
 import csv
 from argparse import Namespace
+from os.path import exists
 from pathlib import Path
 from typing import List
 
@@ -13,7 +14,7 @@ from cli.search import run_search
 from cli.slr import run_slr
 from cli.snowball import run_snowball
 from cli.upload import run_upload
-from config.parser import Config
+from config.parser import Config, DEFAULT_CONFIG_PATH
 from db.paper_database import PaperDatabase
 from util.logger import logger, Level
 
@@ -26,11 +27,12 @@ Description: Entry for interacting with snowball
 """
 
 
-async def _execute(db: PaperDatabase, args: Namespace) -> None:
+async def _execute(db: PaperDatabase, config: Config, args: Namespace) -> None:
     """
     Execute a given cli command
 
     :param db: Paper database
+    :param config: Config details
     :param args: args to get command details from
     """
 
@@ -41,19 +43,18 @@ async def _execute(db: PaperDatabase, args: Namespace) -> None:
         :param csv_path: Path to csv file with paper titles
         :return: List of loaded titles
         """
-        with open(csv_path, 'r') as f:
+        with open(csv_path, 'r', encoding='utf-8') as f:
             return list({r[0] for r in csv.reader(f)})
 
     match args.command:
         case 'slr':
             # todo - log if fail to connect to ollama / openai
-            await run_slr(db, Config(args.config), args.semantic_search,
+            await run_slr(db, config, args.semantic_search,
                           oa_query=args.query,
                           skip_paper_ranking=args.skip_ranking,
                           json_output=args.json,
                           ignore_quota=args.ignore_quota)
         case 'snowball':
-            config = Config(args.config)
             # load args
             round_quota = None if args.no_limit else config.snowball.round_quota
             papers = None
@@ -84,7 +85,7 @@ async def _execute(db: PaperDatabase, args: Namespace) -> None:
             run_inspect(db, args.paper_title)
 
         case 'rank':
-            rank_config = Config(args.config).ranking
+            rank_config = config.ranking
             # load args
             papers = None
             # load titles if provided
@@ -103,7 +104,7 @@ async def _execute(db: PaperDatabase, args: Namespace) -> None:
             # set file paths
             paper_pdf_paths = [args.file] if args.file else [str(f) for f in Path(args.directory).iterdir() if
                                                              f.is_file()]
-            await run_upload(db, Config(args.config), paper_pdf_paths)
+            await run_upload(db, config, paper_pdf_paths)
 
 
 def main() -> None:
@@ -119,9 +120,11 @@ def main() -> None:
         # else update if option
         logger.set_log_level(args.log_level)
 
+    # load config details
+    config = Config(args.config or (DEFAULT_CONFIG_PATH if exists(DEFAULT_CONFIG_PATH) else None))
     with PaperDatabase() as db:
         try:
-            asyncio.run(_execute(db, args))
+            asyncio.run(_execute(db, config, args))
         except Exception as e:
             logger.fatal(e)
 

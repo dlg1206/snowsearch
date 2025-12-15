@@ -1,0 +1,25 @@
+# file: gpu.yaml
+# description: Override to allow ollama and grobid access to GPUs
+#
+# @author: Derek Garcia
+services:
+  ollama:
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [ gpu ]
+  grobid:
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [ gpu ]
