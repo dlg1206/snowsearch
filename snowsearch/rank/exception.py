@@ -7,6 +7,10 @@ Description: Exceptions for Abstract Ranker
 
 
 class ExceedMaxRankingGenerationAttemptsError(Exception):
+    """
+    Failed to generate a valid ranking
+    """
+
     def __init__(self, model: str):
         """
         Failed to generate valid ranking
@@ -18,4 +22,7 @@ class ExceedMaxRankingGenerationAttemptsError(Exception):
 
     @property
     def model(self) -> str:
+        """
+        :return: Model name
+        """
         return self._model
