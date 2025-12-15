@@ -543,8 +543,7 @@ class PaperDatabase(Neo4jDatabase):
             results = session.run(query, **params)
             if include_scores:
                 return [(PaperDTO.create_dto(r["node"]), r["titleScore"], r["abstractScore"]) for r in results]
-            else:
-                return [PaperDTO.create_dto(r["node"]) for r in results]
+            return [PaperDTO.create_dto(r["node"]) for r in results]
 
     def search_papers_by_title_match(self,
                                      search_term: str,
