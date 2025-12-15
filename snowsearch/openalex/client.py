@@ -1,3 +1,12 @@
+"""
+File: client.py
+Description: Client for interacting with the OpenAlex Database
+
+https://docs.openalex.org/
+https://docs.openalex.org/api-guide-for-llms
+@author Derek Garcia
+"""
+
 import asyncio
 import hashlib
 import os
@@ -17,17 +26,12 @@ from openalex.config import POLITE_RATE_LIMIT_SLEEP, DEFAULT_RATE_LIMIT_SLEEP, M
 from openalex.exception import MissingOpenAlexEntryError, ExceedMaxQueryGenerationAttemptsError
 from util.logger import logger
 
-"""
-File: client.py
-Description: Client for interacting with the OpenAlex Database
-
-https://docs.openalex.org/
-https://docs.openalex.org/api-guide-for-llms
-@author Derek Garcia
-"""
-
 
 class OpenAlexClient:
+    """
+    Client to interact with the OpenAlex API
+    """
+
     def __init__(self, email: str = None):
         """
         Create new OpenAlex client
@@ -77,7 +81,7 @@ class OpenAlexClient:
         """
         # init params if dne
         if not params:
-            params = dict()
+            params = {}
         # update params
         self._add_auth(params)
         params['per_page'] = per_page
@@ -298,13 +302,22 @@ class OpenAlexClient:
 
         # report results
         if len(papers):
-            percent = lambda a, b: f"{(a / b) * 100:.01f}%"
+            def __percent(a: int, b: int) -> str:
+                """
+                Format a percent
+
+                :param a: Numerator
+                :param b: Denominator
+                :return: Formated percent
+                """
+                return f"{(a / b) * 100:.01f}%"
+
             num_success = num_doi + num_title
             logger.info(
-                f"Search complete, successfully updated {num_success} papers ({percent(num_success, len(papers))})")
-            logger.debug_msg(f"Found {num_doi} papers by DOI ({percent(num_doi, len(papers))})")
-            logger.debug_msg(f"Found {num_title} papers by title ({percent(num_title, len(papers))})")
-            logger.debug_msg(f"Failed to find {num_missing} papers ({percent(num_missing, len(papers))})")
+                f"Search complete, successfully updated {num_success} papers ({__percent(num_success, len(papers))})")
+            logger.debug_msg(f"Found {num_doi} papers by DOI ({__percent(num_doi, len(papers))})")
+            logger.debug_msg(f"Found {num_title} papers by title ({__percent(num_title, len(papers))})")
+            logger.debug_msg(f"Failed to find {num_missing} papers ({__percent(num_missing, len(papers))})")
 
         return num_doi + num_title
 
@@ -331,10 +344,9 @@ class OpenAlexClient:
                 ],
                 temperature=0
             )
-            '''
-            Attempt to extract the query from the response. 
-            This is to safeguard against wordy and descriptive replies 
-            '''
+
+            # Attempt to extract the query from the response.
+            # This is to safeguard against wordy and descriptive replies
             query_match = QUERY_JSON_RE.findall(completion.choices[0].message.content.strip())
             if query_match:
                 query = query_match[0].strip().replace("'", '"')

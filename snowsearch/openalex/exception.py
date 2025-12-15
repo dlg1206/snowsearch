@@ -7,6 +7,10 @@ Description: Exceptions for OpenAlex
 
 
 class ExceedMaxQueryGenerationAttemptsError(Exception):
+    """
+    Exceed query string generation attempts
+    """
+
     def __init__(self, model: str):
         """
         Failed to generate valid query string
@@ -18,10 +22,17 @@ class ExceedMaxQueryGenerationAttemptsError(Exception):
 
     @property
     def model(self) -> str:
+        """
+        :return: Model Name
+        """
         return self._model
 
 
 class MissingOpenAlexEntryError(Exception):
+    """
+    Could not find an entry in OpenAlex
+    """
+
     def __init__(self, doi: str, title: str):
         """
         Failed to find citation in OpenAlex database
@@ -38,8 +49,14 @@ class MissingOpenAlexEntryError(Exception):
 
     @property
     def doi(self) -> str:
+        """
+        :return: DOI
+        """
         return self._doi
 
     @property
     def title(self) -> str:
+        """
+        :return: Paper title
+        """
         return self._title
