@@ -1,3 +1,12 @@
+"""
+File: Logger.py
+Description: Logger for actions
+
+Adapted from https://github.com/dlg1206/threat-actor-database/blob/main/src/threat_actor_db/log/logger.py
+
+@author Derek Garcia
+"""
+
 import asyncio
 import concurrent.futures
 import inspect
@@ -7,15 +16,6 @@ from enum import Enum
 from typing import Literal, Any, Iterable
 
 from tqdm import tqdm
-
-"""
-File: Logger.py
-Description: Logger for actions
-
-Adapted from https://github.com/dlg1206/threat-actor-database/blob/main/src/threat_actor_db/log/logger.py
-
-@author Derek Garcia
-"""
 
 CLEAR = '\033[00m'
 CALLER_FRAME_DISTANCE = 3
@@ -190,7 +190,7 @@ class Logger:
 
         :param exception: exception
         """
-        self._log(Level.DEBUG, exception.__str__(), exception)
+        self._log(Level.DEBUG, str(exception), exception)
 
     def info(self, msg: str) -> None:
         """
@@ -224,7 +224,7 @@ class Logger:
 
         :param exception: Optional exception type to print
         """
-        self._log(Level.ERROR, exception.__str__(), exception)
+        self._log(Level.ERROR, str(exception), exception)
 
     def fatal(self, exception: Exception) -> None:
         """
@@ -232,8 +232,8 @@ class Logger:
 
         :param exception: Optional exception type to print
         """
-        self._log(Level.FATAL, exception.__str__(), exception)
-        exit(1)
+        self._log(Level.FATAL, str(exception), exception)
+        sys.exit(1)
 
 
 # Global logger

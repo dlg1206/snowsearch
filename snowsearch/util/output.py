@@ -1,3 +1,11 @@
+"""
+File: output.py
+
+Description: Format papers to stdout and json
+
+@author Derek Garcia
+"""
+
 import json
 from datetime import datetime
 from typing import List
@@ -6,14 +14,6 @@ from tabulate import tabulate
 
 from db.paper_database import PaperDatabase
 from dto.paper_dto import PaperDTO
-
-"""
-File: output.py
-
-Description:
-
-@author Derek Garcia
-"""
 
 
 def write_papers_to_json(db: PaperDatabase, json_output: str, papers: List[PaperDTO],

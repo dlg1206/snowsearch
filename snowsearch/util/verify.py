@@ -1,8 +1,3 @@
-from typing import List
-
-from dto.paper_dto import PaperDTO
-from grobid.config import KILOBYTE, PDF_MAGIC
-
 """
 File: verify.py
 
@@ -10,6 +5,11 @@ Description: Util verify functions for paper matches
 
 @author Derek Garcia
 """
+
+from typing import List
+
+from dto.paper_dto import PaperDTO
+from grobid.config import KILOBYTE, PDF_MAGIC
 
 
 def validate_all_papers_found(paper_titles: List[str], found_papers: List[PaperDTO]) -> List[str]:
