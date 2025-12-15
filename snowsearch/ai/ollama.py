@@ -1,10 +1,3 @@
-import requests
-from requests import HTTPError, ConnectionError
-
-from ai.model import ModelClient
-from util.logger import logger
-from util.timer import Timer
-
 """
 File: ollama.py
 
@@ -14,6 +7,13 @@ https://docs.ollama.com/api
 
 @author Derek Garcia
 """
+
+import requests
+from requests import HTTPError, ConnectionError
+
+from ai.model import ModelClient
+from util.logger import logger
+from util.timer import Timer
 
 # ollama details
 DEFAULT_HOST = "localhost"
@@ -28,6 +28,10 @@ OLLAMA_PORT_ENV = "OLLAMA_PORT"
 
 
 class InvalidOllamaServerError(Exception):
+    """
+    Failed to connect to Ollama server
+    """
+
     def __init__(self, ollama_url: str):
         """
         Failed to connect to Ollama server
@@ -39,10 +43,17 @@ class InvalidOllamaServerError(Exception):
 
     @property
     def ollama_url(self) -> str:
+        """
+        :return: URL of ollama server
+        """
         return self._ollama_url
 
 
 class UnknownOllamaModelError(Exception):
+    """
+    Attempt to download an unknown model
+    """
+
     def __init__(self, model: str):
         """
         Attempt to download an unknown model
@@ -54,12 +65,22 @@ class UnknownOllamaModelError(Exception):
 
     @property
     def model(self) -> str:
+        """
+        :return: Name of bad model
+        """
         return self._model
 
 
 class OllamaClient(ModelClient):
+    """
+    Interface for using Ollama API
+    """
 
-    def __init__(self, ollama_host: str, ollama_port: int, context_window: int, model_name: str, model_tag: str = "latest"):
+    def __init__(self, ollama_host: str,
+                 ollama_port: int,
+                 context_window: int,
+                 model_name: str,
+                 model_tag: str = "latest"):
         """
         Create new Ollama Client
         Configured for 1 client 1 model

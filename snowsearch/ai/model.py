@@ -1,12 +1,3 @@
-from abc import ABC
-from typing import Any, Tuple
-
-from openai import AsyncOpenAI
-from openai.types.chat import ChatCompletion
-
-from util.logger import logger
-from util.timer import Timer
-
 """
 File: model.py
 
@@ -15,8 +6,20 @@ Description: Generic model client for connecting and authenticating with an Open
 @author Derek Garcia
 """
 
+from abc import ABC
+from typing import Any, Tuple, List
+
+from openai import AsyncOpenAI
+from openai.types.chat import ChatCompletion
+
+from util.logger import logger
+from util.timer import Timer
+
 
 class ModelClient(ABC):
+    """
+    Abstract model client for interacting with different LLM APIs
+    """
 
     def __init__(self, model: str, context_window: int, api_key: str, base_url: str = None):
         """
@@ -37,23 +40,31 @@ class ModelClient(ABC):
         # create client
         self._model_client = AsyncOpenAI(**params)
 
-    async def prompt(self, **prompt_kwargs: Any) -> Tuple[ChatCompletion, Timer]:
+    async def prompt(self, messages: List[Any], **prompt_kwargs: Any) -> Tuple[ChatCompletion, Timer]:
         """
         Prompt a model
 
-        :param prompt_kwargs: OpenAI kwargs for chat
+        :param messages: Messages to send to llm
+        :param prompt_kwargs: kwargs for chat
         :return: Completed chat object and timer
         """
         logger.debug_msg(f"Prompting '{self._model}'")
         timer = Timer()
-        completion = await self._model_client.chat.completions.create(model=self._model, **prompt_kwargs)
+        completion = \
+            await self._model_client.chat.completions.create(model=self._model, messages=messages, **prompt_kwargs)
         logger.debug_msg(f"Response from '{self._model}' generated in {timer.format_time()}s")
         return completion, timer
 
     @property
     def model(self) -> str:
+        """
+        :return: Model name
+        """
         return self._model
 
     @property
     def context_window(self) -> int:
+        """
+        :return: Reported context window
+        """
         return self._context_window
