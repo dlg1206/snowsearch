@@ -1,7 +1,3 @@
-from db.paper_database import PaperDatabase
-from util.logger import logger
-from util.output import print_ranked_papers
-
 """
 File: inspect.py
 
@@ -9,6 +5,10 @@ Description: Get details about a paper printed to stdout
 
 @author Derek Garcia
 """
+
+from db.paper_database import PaperDatabase
+from util.logger import logger
+from util.output import print_ranked_papers
 
 
 def run_inspect(db: PaperDatabase, paper_title: str) -> None:

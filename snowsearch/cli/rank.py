@@ -1,3 +1,11 @@
+"""
+File: rank.py
+
+Description: Use an LLM to rank papers based on a search term
+
+@author Derek Garcia
+"""
+
 import os
 from dataclasses import asdict
 from typing import List
@@ -11,14 +19,6 @@ from rank.abstract_ranker import AbstractRanker
 from util.logger import logger
 from util.output import write_papers_to_json, print_ranked_papers
 from util.verify import validate_all_papers_found
-
-"""
-File: rank.py
-
-Description: Use an LLM to rank papers based on a search term
-
-@author Derek Garcia
-"""
 
 
 async def rank_papers(rank_config: RankingConfigDTO, nl_query: str, papers: List[PaperDTO]) -> List[PaperDTO]:
@@ -69,7 +69,7 @@ async def run_rank(db: PaperDatabase, rank_config: RankingConfigDTO, nl_query: s
 
     # error if no papers
     if not papers_to_rank:
-        raise Exception("No papers to rank")
+        raise ValueError("No papers to rank")
 
     # rank and print results
     ranked_papers = await rank_papers(rank_config, nl_query, papers_to_rank)

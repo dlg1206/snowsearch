@@ -1,3 +1,11 @@
+"""
+File: snowball.py
+
+Description: Perform rounds of snowballing from the cli
+
+@author Derek Garcia
+"""
+
 from typing import List, Tuple
 
 from config.parser import Config
@@ -8,14 +16,6 @@ from openalex.client import OpenAlexClient
 from util.logger import logger
 from util.timer import Timer
 from util.verify import validate_all_papers_found
-
-"""
-File: snowball.py
-
-Description: Perform rounds of snowballing from the cli
-
-@author Derek Garcia
-"""
 
 
 async def snowball(db: PaperDatabase, openalex_client: OpenAlexClient, grobid_worker: GrobidWorker,
@@ -56,8 +56,7 @@ async def snowball(db: PaperDatabase, openalex_client: OpenAlexClient, grobid_wo
                                                 paper_limit=num_papers,
                                                 min_score=min_similarity_score)
         # else get unprocessed papers
-        else:
-            return db.get_unprocessed_papers(num_papers)
+        return db.get_unprocessed_papers(num_papers)
 
     # perform n rounds of snowballing
     processed_papers = 0
@@ -174,7 +173,7 @@ async def run_snowball(db: PaperDatabase, config: Config,
                                                      round_quota=round_quota,
                                                      min_similarity_score=config.snowball.min_similarity_score,
                                                      ignore_quota=ignore_quota,
-                                                     seed_provided=True if seed_paper_titles else False)
+                                                     seed_provided=bool(seed_paper_titles))
 
     # log stats
     logger.info(f"Snowballing complete in {timer.format_time()}s")

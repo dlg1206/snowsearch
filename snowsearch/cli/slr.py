@@ -1,3 +1,10 @@
+"""
+File: slr.py
+Description: Orchestrate entire strategic literature review pipeline
+
+@author Derek Garcia
+"""
+
 import os
 from dataclasses import asdict
 
@@ -12,13 +19,6 @@ from openalex.client import OpenAlexClient
 from util.logger import logger
 from util.output import write_papers_to_json, print_ranked_papers
 from util.timer import Timer
-
-"""
-File: slr.py
-Description: Orchestrate entire strategic literature review pipeline
-
-@author Derek Garcia
-"""
 
 
 async def run_slr(db: PaperDatabase, config: Config, nl_query: str,
@@ -59,7 +59,7 @@ async def run_slr(db: PaperDatabase, config: Config, nl_query: str,
         logger.info(f"Using provided OpenAlex | {oa_query}")
         db.insert_openalex_query(run_id, None, nl_query, oa_query)
     else:
-        oa_query_model = OpenAIClient(config.query_generation.model_name) \
+        oa_query_model = OpenAIClient(config.query_generation.model_name, config.query_generation.context_window) \
             if os.getenv(OPENAI_API_KEY_ENV) else OllamaClient(**asdict(config.query_generation))
         oa_query = await openalex_client.generate_openalex_query(oa_query_model, nl_query)
         db.insert_openalex_query(run_id, oa_query_model.model, nl_query, oa_query)

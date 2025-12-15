@@ -1,3 +1,11 @@
+"""
+File: search.py
+
+Description: Prebuilt commands to search the neo4j database
+
+@author Derek Garcia
+"""
+
 import re
 from typing import List, Tuple
 
@@ -8,16 +16,18 @@ from dto.paper_dto import PaperDTO
 from util.logger import logger
 from util.output import print_ranked_papers, write_papers_to_json
 
-"""
-File: search.py
-
-Description: Prebuilt commands to search the neo4j database
-
-@author Derek Garcia
-"""
-
 RED = "\033[31m"
 RESET = "\033[0m"
+
+
+def _highlight(m: re.Match) -> str:
+    """
+    Highlight match in red
+
+    :param m: Match
+    :return: Highlighted match
+    """
+    return f"{RED}{m.group(0)}{RESET}"
 
 
 def _print_exact_papers(db: PaperDatabase, search_term: str, paper_matches: List[PaperDTO]) -> None:
@@ -27,13 +37,12 @@ def _print_exact_papers(db: PaperDatabase, search_term: str, paper_matches: List
     :param db: Paper database to get additional details from
     :param paper_matches: List of matching paper DTOs
     """
-    highlight = lambda m: f"{RED}{m.group(0)}{RESET}"
 
     headers = ['#', 'Title', 'DOI', 'URL', 'OpenAlex', 'Citations']
     table = []
     for i, paper in enumerate(paper_matches, start=1):
         table.append([i,
-                      re.sub(rf'{search_term}', highlight, paper.id, flags=re.IGNORECASE),
+                      re.sub(rf'{search_term}', _highlight, paper.id, flags=re.IGNORECASE),
                       paper.doi,
                       paper.pdf_url,
                       paper.openalex_url,
@@ -104,9 +113,8 @@ def run_search(db: PaperDatabase, nl_query: str,
         if not papers:
             logger.warn(f"Found no paper titles that contain the term '{nl_query}'")
         # highlight matches
-        highlight = lambda m: f"{RED}{m.group(0)}{RESET}"
         for p in papers:
-            p.id = re.sub(rf'{nl_query}', highlight, p.id, flags=re.IGNORECASE)
+            p.id = re.sub(rf'{nl_query}', _highlight, p.id, flags=re.IGNORECASE)
         # print
         print_ranked_papers(db, papers, include_abstract=True)
     else:

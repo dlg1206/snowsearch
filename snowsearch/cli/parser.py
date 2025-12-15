@@ -1,13 +1,13 @@
-from argparse import ArgumentParser
-
-from util.logger import Level, DEFAULT_LOG_LEVEL
-
 """
 File: parser.py
 Description: CLI command parser
 
 @author Derek Garcia
 """
+
+from argparse import ArgumentParser
+
+from util.logger import Level, DEFAULT_LOG_LEVEL
 
 PROG_NAME = "snowsearch"
 
@@ -263,14 +263,15 @@ def create_parser() -> ArgumentParser:
     config = parser.add_argument_group("Configuration")
     config.add_argument('-c', '--config',
                         metavar="<path to config file>",
-                        help=f"Path to config file to use")
+                        help="Path to config file to use")
 
     # logging flags
     logging = parser.add_argument_group("Logging")
     logging.add_argument("-l", "--log-level",
                          metavar="<log level>",
                          choices=[Level.INFO.name, Level.WARN.name, Level.ERROR.name, Level.DEBUG.name],
-                         help=f"Set log level (Default: {DEFAULT_LOG_LEVEL.name}) ({[Level.INFO.name, Level.WARN.name, Level.ERROR.name, Level.DEBUG.name]})",
+                         help=f"Set log level (Default: {DEFAULT_LOG_LEVEL.name}) "
+                              f"({[Level.INFO.name, Level.WARN.name, Level.ERROR.name, Level.DEBUG.name]})",
                          default=DEFAULT_LOG_LEVEL.name)
     logging.add_argument("-s", "--silent",
                          action="store_true",
