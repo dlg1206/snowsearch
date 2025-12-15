@@ -1,3 +1,11 @@
+"""
+File: paper_database.py
+
+Description: Specialized interface for abstracting Neo4j commands to the database
+
+@author Derek Garcia
+"""
+
 import logging
 import os
 from dataclasses import asdict
@@ -13,25 +21,22 @@ from dto.paper_dto import PaperDTO
 from util.logger import logger
 from util.timer import Timer
 
-"""`
-File: paper_database.py
-
-Description: Specialized interface for abstracting Neo4j commands to the database
-
-@author Derek Garcia
-`"""
-
 # supress INFO logs from sentence_transformers
 logging.getLogger("sentence_transformers").setLevel(logging.WARNING)
 
 
 class PaperDatabase(Neo4jDatabase):
+    """
+    Instance of a neo4j database for paper operations
+    """
+
     def __init__(self, embedding_model_name: str = DEFAULT_EMBEDDING_MODEL, model_dimensions: int = DEFAULT_DIMENSIONS):
         """
         Create new instance of the interface
 
         :param embedding_model_name: Optional embedding model to use (Default: all-MiniLM-L6-v2)
-        :param model_dimensions: Optional dimensions of embedding model. Must match the provided embedding model (Default: 384)
+        :param model_dimensions: Optional dimensions of embedding model.
+                                 Must match the provided embedding model (Default: 384)
         """
         super().__init__()
 
@@ -471,7 +476,7 @@ class PaperDatabase(Neo4jDatabase):
         :param only_open_access: Only get papers that have an 'open access' label
         :param require_abstract: Require that paper has an abstract
         :param paper_limit: Limit the max number of papers to return (Default: 100)
-        :param min_score: Minimum similarity score of prompt to abstract, must be [-1,1] (Default: None but 0.4 recommended)
+        :param min_score: Minimum similarity score of prompt to abstract, must be [-1,1] (Default: None, .4 recommended)
         :param order_by_abstract: Return search order by abstract match then title match (Default: False)
         :param include_scores: Include the match score of nl_query (Default: False)
         :raises ValueError: If provided min_score is outside [-1,1] range
