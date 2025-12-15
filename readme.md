@@ -100,6 +100,7 @@ pip -m venv venv
 ```
 
 Then activate
+
 Windows:
 
 ```bash
@@ -133,7 +134,8 @@ docker compose up -f compose.yaml -f override/dev.yaml
 ```
 
 This will open up all service ports so scripts run on your machine will be able to access them through `localhost` and
-their respective ports.
+their respective ports. For working with the database, see the [database doc](docs/database.md) for a rundown to how objects have been 
+structured.
 
 ## Acknowledgments
 
