@@ -1,12 +1,3 @@
-import hashlib
-from dataclasses import dataclass, fields
-from datetime import datetime, date
-from typing import Dict
-
-from db.config import DOI_PREFIX
-from openalex.config import DEFAULT_WRAP
-from util.logger import logger
-
 """
 File: paper_dto.py
 Description: DTOs for OpenAlex
@@ -14,9 +5,20 @@ Description: DTOs for OpenAlex
 @author Derek Garcia
 """
 
+import hashlib
+from dataclasses import dataclass, fields
+from datetime import datetime, date
+from typing import Dict
+
+from db.config import DOI_PREFIX
+from openalex.config import DEFAULT_WRAP
+
 
 @dataclass
 class PaperDTO:
+    """
+    DTO representation of a paper
+    """
     id: str
     publication_year: int = None
     publication_date: date = None
@@ -78,7 +80,7 @@ class PaperDTO:
 
     def __post_init__(self):
         if self.id is None:
-            KeyError("PaperDTO MUST have an id")
+            raise KeyError("PaperDTO MUST have an id")
 
         if self.doi:
             self.doi = self.doi.removeprefix(DOI_PREFIX)
