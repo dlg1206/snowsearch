@@ -2,7 +2,7 @@
 
 > Overview of all commands currently available
 
-Docker: `docker run --rm -it snowsearch`
+Docker: `docker run --rm -it --network=snowsearch-net snowsearch`
 
 ```
 usage: snowsearch [-h] [-c <path to config file>] [-l <log level>] [-s]
@@ -41,14 +41,14 @@ A [configuration file](../config.yaml) is also available to use. If no config fi
 a `config.yaml` to use, otherwise will use default values. To use with docker, mount the file like so:
 
 ```bash
-docker run --rm -it -v "$(pwd)/config.yaml:/snowsearch/config.yaml" snowsearch <args>
+docker run --rm -it --network=snowsearch-net -v "$(pwd)/config.yaml:/snowsearch/config.yaml" snowsearch <args>
 ```
 
 ## Table of Contents
 
 ### slr
 
-Docker: `docker run --rm -it snowsearch slr -h`
+Docker: `docker run --rm -it --network=snowsearch-net snowsearch slr -h`
 
 ```
 usage: snowsearch slr [-h] [--ignore-quota] [-q <query>]
@@ -81,12 +81,12 @@ options:
 To save the JSON file, mount a directory like so:
 
 ```bash
-docker run --rm -it -v "$(pwd)/out:/out" snowsearch slr <args> -j /out/output.json
+docker run --rm -it --network=snowsearch-net -v "$(pwd)/out:/out" snowsearch slr <args> -j /out/output.json
 ```
 
 ### Snowball
 
-Docker: `docker run --rm -it snowsearch snowball -h`
+Docker: `docker run --rm -it --network=snowsearch-net snowsearch snowball -h`
 
 ```
 usage: snowsearch snowball [-h] [-ss <semantic-search>] [--ignore-quota]
@@ -118,7 +118,7 @@ options:
 To read the csv file, mount a directory like so:
 
 ```bash
-docker run --rm -it -v "$(pwd)/in/input.csv:/in/input.csv" snowsearch snowball <args> -i /in/input.csv
+docker run --rm -it --network=snowsearch-net -v "$(pwd)/in/input.csv:/in/input.csv" snowsearch snowball <args> -i /in/input.csv
 ```
 
 Where `"$(pwd)/in/input.csv` is the absolute path to your csv file. The csv file should be formatted like so:
@@ -132,7 +132,7 @@ Title with spaces
 
 ### Search
 
-Docker: `docker run --rm -it snowsearch search -h`
+Docker: `docker run --rm -it --network=snowsearch-net snowsearch search -h`
 
 ```
 usage: snowsearch search [-h] [-l <limit>] [-m <score>] [-j <json-file-path>]
@@ -168,12 +168,12 @@ options:
 To save the JSON file, mount a directory like so:
 
 ```bash
-docker run --rm -it -v "$(pwd)/out:/out" snowsearch search <args> -j /out/output.json
+docker run --rm -it --network=snowsearch-net -v "$(pwd)/out:/out" snowsearch search <args> -j /out/output.json
 ```
 
 ### Inspect
 
-Docker: `docker run --rm -it snowsearch inspect -h`
+Docker: `docker run --rm -it --network=snowsearch-net snowsearch inspect -h`
 
 ```
 usage: snowsearch inspect [-h] <title-of-paper>
@@ -189,7 +189,7 @@ options:
 
 ### Rank
 
-Docker: `docker run --rm -it snowsearch rank -h`
+Docker: `docker run --rm -it --network=snowsearch-net snowsearch rank -h`
 
 ```
 usage: snowsearch rank [-h] [-l <limit>] [-m <score>] [-j <json-file-path>]
@@ -225,13 +225,13 @@ options:
 To save the JSON file, mount a directory like so:
 
 ```bash
-docker run --rm -it -v "$(pwd)/out:/out" snowsearch rank <args> -j /out/output.json
+docker run --rm -it --network=snowsearch-net -v "$(pwd)/out:/out" snowsearch rank <args> -j /out/output.json
 ```
 
 To read the csv file, mount a directory like so:
 
 ```bash
-docker run --rm -it -v "$(pwd)/in/input.csv:/in/input.csv" snowsearch rank <args> -i /in/input.csv
+docker run --rm -it --network=snowsearch-net -v "$(pwd)/in/input.csv:/in/input.csv" snowsearch rank <args> -i /in/input.csv
 ```
 
 Where `"$(pwd)/in/input.csv` is the absolute path to your csv file. The csv file should be formatted like so:
@@ -245,7 +245,7 @@ Title with spaces
 
 ### Upload
 
-Docker: `docker run --rm -it snowsearch upload -h`
+Docker: `docker run --rm -it --network=snowsearch-net snowsearch upload -h`
 
 ```
 usage: snowsearch upload [-h] (-f <pdf-path> | -d <pdf-directory-path>)
@@ -263,7 +263,7 @@ options:
 To save the pdf file, mount a file like so:
 
 ```bash
-docker run --rm -it -v "$(pwd)/in/input.pdf:/in/input.pdf" snowsearch snowball <args> -f /in/input.pdf
+docker run --rm -it --network=snowsearch-net -v "$(pwd)/in/input.pdf:/in/input.pdf" snowsearch snowball <args> -f /in/input.pdf
 ```
 
 Where `"$(pwd)/in/input.pdf` is the absolute path to your pdf file.
@@ -271,7 +271,7 @@ Where `"$(pwd)/in/input.pdf` is the absolute path to your pdf file.
 To save the directory of pdfs, mount a directory like so:
 
 ```bash
-docker run --rm -it -v "$(pwd)/in:/in" snowsearch snowball <args> -d /in
+docker run --rm -it --network=snowsearch-net -v "$(pwd)/in:/in" snowsearch snowball <args> -d /in
 ```
 
 Where `"$(pwd)/in` is the absolute path the directory of pdfs

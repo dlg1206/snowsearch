@@ -52,7 +52,7 @@ services are running
 4. Launch the CLI
 
 ```bash
-docker run --rm -it -env-file=.env --network=snowsearch-net snowsearch slr "Your search here"
+docker run --rm -it --env-file=.env --network=snowsearch-net snowsearch slr "Your search here"
 ```
 
 and snowsearch will do the rest! For the list of all options, see the [commands readme](docs/commands.md).
