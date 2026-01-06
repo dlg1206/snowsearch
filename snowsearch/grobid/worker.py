@@ -15,15 +15,17 @@ from tempfile import NamedTemporaryFile, TemporaryDirectory
 from typing import List, Dict, Any
 
 import grobid_tei_xml
-from aiohttp import ClientSession, ClientResponseError
+from aiohttp import ClientSession
 from grobid_client.grobid_client import GrobidClient
 
 from db.paper_database import PaperDatabase
+from download.config import MAX_CONCURRENT_DOWNLOADS, MAX_PDF_COUNT
+from download.exception import NoFileDataError, InvalidFileFormatError, PaperDownloadError
+from download.pdf import download_pdf
 from dto.grobid_dto import GrobidDTO
 from dto.paper_dto import PaperDTO
-from grobid.config import MAX_CONCURRENT_DOWNLOADS, MAX_PDF_COUNT, KILOBYTE, DOWNLOAD_HEADERS, PDF_MAGIC, \
-    MAX_GROBID_REQUESTS
-from grobid.exception import PaperDownloadError, GrobidProcessError, NoFileDataError, InvalidFileFormatError
+from grobid.config import MAX_GROBID_REQUESTS
+from grobid.exception import GrobidProcessError
 from util.logger import logger
 from util.timer import Timer
 
@@ -57,51 +59,6 @@ class GrobidWorker:
         self._grobid_semaphore = Semaphore(max_grobid_requests)
         self._download_semaphore = Semaphore(max_concurrent_downloads)
         self._pdf_file_semaphore = Semaphore(max_local_pdfs)
-
-    async def _download_pdf(self, session: ClientSession, title: str, pdf_url: str, output_path: str) -> None:
-        """
-        Download pdf to file
-
-        :param session: HTTP session to use
-        :param title: Name of paper to download
-        :param pdf_url: URL of pdf to download
-        :param output_path: Path to write PDF to
-        :raises ClientResponseError: If fail to download PDF
-        """
-        # block to prevent excessive downloads
-        async with self._download_semaphore:
-            try:
-                async with session.get(pdf_url, headers=DOWNLOAD_HEADERS) as response:
-                    logger.debug_msg(f"Downloading '{response.url}'")
-                    response.raise_for_status()
-                    # download pdf
-                    timer = Timer()
-                    first_pass = True
-                    with open(output_path, 'wb') as f:
-                        while True:
-                            chunk = await response.content.read(KILOBYTE)
-
-                            if not chunk:
-                                # no data to write
-                                if first_pass:
-                                    raise NoFileDataError(title, pdf_url)
-                                # break if no data left to read
-                                break
-
-                            # validate pdf
-                            if first_pass:
-                                # file is not a pdf
-                                if not chunk.startswith(PDF_MAGIC):
-                                    raise InvalidFileFormatError(title, pdf_url)
-                                first_pass = False
-
-                            f.write(chunk)
-            except ClientResponseError as e:
-                raise PaperDownloadError(title, e.status, e.message, pdf_url) from e
-            except Exception as e:
-                raise PaperDownloadError(title, 500, str(e), pdf_url) from e
-
-        logger.debug_msg(f"Saved '{output_path}' in {timer.format_time()}s | {pdf_url}")
 
     async def process_paper(self, pdf_file_path: str, title: str = None) -> GrobidDTO:
         """
@@ -159,8 +116,12 @@ class GrobidWorker:
                 # todo - change to download n papers successfully, then send all to grobid to process?
                 # limit number of downloaded pdfs
                 async with self._pdf_file_semaphore:
-                    # attempt to download paper with retry logic
-                    await self._download_pdf(session, title, pdf_url, tmp_pdf.name)
+                    # block to prevent excessive downloads
+                    async with self._download_semaphore:
+                        timer = Timer()
+                        await download_pdf(session, title, pdf_url, tmp_pdf.name)
+                        logger.debug_msg(f"Saved '{tmp_pdf.name}' in {timer.format_time()}s | {pdf_url}")
+
                     # process paper
                     return await self.process_paper(tmp_pdf.name, title)
         finally:
