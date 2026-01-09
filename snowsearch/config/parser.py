@@ -13,7 +13,8 @@ from typing import Dict, Any, List
 import yaml
 
 from config.default import OllamaDefaults, AgentDefaults, AbstractRankingDefaults, GrobidDefaults, SnowballDefaults
-from grobid.config import MAX_CONCURRENT_DOWNLOADS, MAX_PDF_COUNT
+from download.config import MAX_PDF_COUNT
+from grobid.config import MAX_CONCURRENT_DOWNLOADS
 from util.logger import logger
 
 DEFAULT_CONFIG_PATH = "config.yaml"
