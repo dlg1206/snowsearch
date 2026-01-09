@@ -14,11 +14,14 @@ from typing import List, Dict, Any, Set
 
 from aiohttp import ClientSession
 from pyzotero.zotero import Zotero
+from pyzotero.zotero_errors import UserNotAuthorisedError
 
 from download.exception import NoFileDataError, InvalidFileFormatError, PaperDownloadError
 from download.pdf import download_pdf
 from dto.paper_dto import PaperDTO
 from util.logger import logger
+
+ZOTERO_API_KEY_ENV = "ZOTERO_API_KEY"
 
 
 class LibraryType(Enum):
@@ -27,6 +30,38 @@ class LibraryType(Enum):
     """
     USER = "user"
     GROUP = "group"
+
+
+class InvalidAPIKeyError(Exception):
+    """
+    Failed to validate Zotero API key
+    """
+
+    def __init__(self):
+        """
+        Failed to validate Zotero API key
+        """
+        super().__init__("Failed to validate Zotero API key")
+
+
+class InsufficientPermissionsError(Exception):
+    """
+    Zotero API key does not have the required permissions to work
+    """
+
+    def __init__(self, missing_permissions: List[str], library_id: str = None):
+        """
+        Zotero API key does not have the required permissions to work
+
+        :param missing_permissions: List of missing permissions
+        :param library_id: Optional ID of group library (Default: None)
+        """
+        msg = "Zotero API key is missing the following permissions to access "
+        if library_id:
+            msg += f"the group library '{library_id}': "
+        else:
+            msg += "your personal library: "
+        super().__init__(msg + ", ".join(missing_permissions))
 
 
 class ZoteroClient:
@@ -42,10 +77,80 @@ class ZoteroClient:
         :param library_type: Type of library
         :param collection_key: Optional collection key to specific collection to work with (Default: All)
         """
-        # todo - check for api key
-        self._zot = Zotero(library_id, library_type.value, os.getenv('ZOTERO_API_KEY'))
+        # ensure zotero api key is present
+        if not os.getenv(ZOTERO_API_KEY_ENV):
+            raise EnvironmentError(f"Missing API key in environment variable: {ZOTERO_API_KEY_ENV}")
+        self._zot = Zotero(library_id, library_type.value, os.getenv(ZOTERO_API_KEY_ENV))
+        self._validate_api_key(library_type, library_id)
         # todo make list to support multiple collections
         self._collection_key = collection_key
+
+    def _validate_api_key(self, library_type: LibraryType, library_id: str) -> None:
+        """
+        Verify OpenAI key is valid and has access to the requested model
+
+        :raises InvalidAPIKey: If failed to verify key and model
+        """
+
+        def __find_missing_perms(obj: Dict[str, bool]) -> List[str]:
+            """
+            Check for missing params for SnowSearch to work
+
+            :param obj: Permissions object
+            :return: List of missing permissions
+            """
+            m = []
+            # value is always true, absence means permission is missing
+            if not obj.get('library'):
+                m.append('library')
+            if not obj.get('write'):
+                m.append('write')
+            return m
+
+        try:
+            permissions = self._zot.key_info()
+            logger.debug_msg("Zotero API key is valid")
+            # validate personal library perms
+            if library_type == LibraryType.USER:
+                user_perms = permissions['access'].get('user', {})
+                missing_perms = __find_missing_perms(user_perms)
+                if missing_perms:
+                    raise InsufficientPermissionsError(missing_perms)
+
+                # warn if excessive permissions
+                if 'notes' in user_perms:
+                    logger.warn(
+                        "Zotero API key has notes access but not needed for SnowSearch, considered removing access")
+                if 'group' in permissions['access']:
+                    logger.warn(
+                        "Zotero API key has access to group libraries but configured to use for personal libraries, considered removing access")
+
+            # validate group library params
+            else:
+                groups_perms = permissions['access'].get('groups', {})
+
+                # attempt to get specific library key, use 'all' key as fallback
+                key = library_id if library_id in groups_perms else 'all'
+                group_perms = groups_perms.get(key, {})
+                missing_perms = __find_missing_perms(group_perms)
+                if missing_perms:
+                    raise InsufficientPermissionsError(missing_perms, library_id=library_id)
+
+                # warn if excessive permissions
+                if key == 'all':
+                    logger.warn(
+                        f"Using default group permissions, consider defining permissions for only group library '{library_id}'")
+                if key == library_id and len(groups_perms) > 1:
+                    logger.warn(
+                        f"Zotero API key has access to other group libraries but configured to use group library '{library_id}', considered removing access")
+                if 'user' in permissions['access']:
+                    logger.warn(
+                        "Zotero API key has access to personal library but configured to use group libraries, considered removing access")
+
+            logger.debug_msg("Zotero API key has sufficient permissions")
+        except UserNotAuthorisedError as e:
+            # bad API key
+            raise InvalidAPIKeyError() from e
 
     def _fetch_existing_doi(self) -> Set[str]:
         """

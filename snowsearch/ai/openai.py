@@ -44,9 +44,9 @@ class OpenAIClient(ModelClient):
         """
         logger.debug_msg("Using openai client")
         # ensure openapi key is present
-        if not os.getenv('OPENAI_API_KEY'):
-            raise EnvironmentError("Missing API key in environment variable: OPENAI_API_KEY")
-        super().__init__(model=model_name, context_window=context_window, api_key=os.getenv('OPENAI_API_KEY'))
+        if not os.getenv(OPENAI_API_KEY_ENV):
+            raise EnvironmentError(f"Missing API key in environment variable: {OPENAI_API_KEY_ENV}")
+        super().__init__(model=model_name, context_window=context_window, api_key=os.getenv(OPENAI_API_KEY_ENV))
 
         # validate key
         self._verify_api_key()
