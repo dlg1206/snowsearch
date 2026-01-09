@@ -8,9 +8,8 @@ Description: Client for interacting with a zotero library
 import os
 from enum import Enum
 from os.path import exists
-from pathlib import Path
 from tempfile import TemporaryDirectory, NamedTemporaryFile
-from typing import List, Dict, Any, Set
+from typing import List, Dict, Any, Set, Tuple
 
 from aiohttp import ClientSession
 from pyzotero.zotero import Zotero
@@ -152,12 +151,12 @@ class ZoteroClient:
             # bad API key
             raise InvalidAPIKeyError() from e
 
-    def _fetch_existing_doi(self) -> Set[str]:
+    def _fetch_existing_items(self) -> Tuple[Set[str], Set[str]]:
         """
-        Fetch list of DOI in a zotero library
+        Fetch list of items in a zotero library
 
-        # todo include titles for fallback
-        :return: Set of DOI
+
+        :return: Set of DOI and titles of items
         """
         if self._collection_key:
             collection = self._zot.collection(self._collection_key)
@@ -166,13 +165,18 @@ class ZoteroClient:
         # fetch items
         zot_items = self._zot.everything(self._zot.collection_items(self._collection_key)
                                          if self._collection_key else self._zot.items())
-        # find identifiers
-        existing_doi = set()
-        for item in zot_items:
-            doi = item['data'].get('DOI')
+        # return identifiers
+        existing_doi, existing_titles = set(), set()
+        for i in zot_items:
+            doi = i['data'].get('DOI')
             if doi:
                 existing_doi.add(doi.lower())
-        return existing_doi
+
+            title = i['data'].get('title')
+            if title:
+                existing_titles.add(title.lower())
+
+        return existing_doi, existing_titles
 
     async def _create_zotero_item_task(self, session: ClientSession, paper: PaperDTO, work_dir: str) -> Dict[str, Any]:
         """
@@ -185,14 +189,14 @@ class ZoteroClient:
         """
         # if pdf url and download didn't already fail
         if paper.pdf_url and paper.download_status != 500:
-            tmp_pdf = NamedTemporaryFile(dir=work_dir, prefix="zotero-", suffix=".pdf", delete=False)
+            tmp_pdf = NamedTemporaryFile(dir=work_dir, suffix=".pdf", delete=False)
             try:
                 await download_pdf(session, paper.id, paper.pdf_url, tmp_pdf.name)
                 # download success, create placeholder pdf value
                 template = self._zot.item_template('attachment', 'imported_file')
-                template['title'] = 'PDF'
+                template['title'] = paper.id
                 template['contentType'] = 'application/pdf'
-                template['filename'] = 'PDF.pdf'
+                template['filename'] = os.path.basename(tmp_pdf.name)
                 return template
             except (NoFileDataError, InvalidFileFormatError, PaperDownloadError) as e:
                 logger.error_exp(e)
@@ -213,17 +217,26 @@ class ZoteroClient:
         :param papers: List of papers to upload
         """
 
-        existing_doi = self._fetch_existing_doi()
+        existing_doi, existing_titles = self._fetch_existing_items()
         new_zot_items = []
         with TemporaryDirectory(prefix='zotero-') as work_dir:
             async with ClientSession() as session:
                 tasks = []
                 # find only new papers
                 for p in papers:
-                    if not p.doi or p.doi and p.doi not in existing_doi:
-                        tasks.append(self._create_zotero_item_task(session, p, work_dir))
+                    if p.doi:
+                        # DOI is available and not already added
+                        if p.doi.lower() not in existing_doi:
+                            tasks.append(self._create_zotero_item_task(session, p, work_dir))
+                        else:
+                            logger.debug_msg(f"Skipping duplicate DOI '{p.doi}'")
                     else:
-                        logger.debug_msg(f"Skipping duplicate DOI '{p.doi}'")
+                        # DOI is not available and title not already added
+                        if p.id.lower() not in existing_titles:
+                            tasks.append(self._create_zotero_item_task(session, p, work_dir))
+                        else:
+                            logger.debug_msg(f"Skipping duplicate title '{p.id}'")
+
                 # exit early if nothing new to add
                 if not tasks:
                     logger.warn("No new papers to upload, exiting. . .")
@@ -236,13 +249,14 @@ class ZoteroClient:
                     new_zot_items.append(template)
 
             # upload items to Zotero
-            logger.info("Uploading items. . .")
-            response = self._zot.create_items(new_zot_items)
-            if response['failed']:
-                logger.warn("Some items failed to be created")
-            tmp_pdfs = [f.name for f in Path(work_dir).iterdir() if f.is_file()]
+            if new_zot_items:
+                logger.info("Uploading items. . .")
+                response = self._zot.create_items(new_zot_items)
+                if response['failed']:
+                    logger.warn("Some items failed to be created")
+
             # exit early if nothing to upload
-            if not tmp_pdfs:
+            if not len(os.listdir(work_dir)):
                 logger.info("No PDFs to upload")
                 return
 
@@ -256,7 +270,7 @@ class ZoteroClient:
                 # else assign a pdf to the new blank item
                 attachments.append({
                     'key': r['key'],
-                    'filename': tmp_pdfs.pop()
+                    'filename': r['data']['filename']
                 })
             # upload pdfs
             self._zot.upload_attachments(attachments, basedir=work_dir)
