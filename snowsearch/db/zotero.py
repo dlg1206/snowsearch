@@ -13,7 +13,7 @@ from typing import List, Dict, Any, Set, Tuple
 
 from aiohttp import ClientSession
 from pyzotero.zotero import Zotero
-from pyzotero.zotero_errors import UserNotAuthorisedError
+from pyzotero.zotero_errors import UserNotAuthorisedError, ResourceNotFoundError
 
 from download.exception import NoFileDataError, InvalidFileFormatError, PaperDownloadError
 from download.pdf import download_pdf
@@ -82,6 +82,12 @@ class ZoteroClient:
         self._zot = Zotero(library_id, library_type.value, os.getenv(ZOTERO_API_KEY_ENV))
         self._validate_api_key(library_type, library_id)
         # todo make list to support multiple collections
+        if collection_key:
+            try:
+                self._zot.collection(collection_key)
+            except ResourceNotFoundError as e:
+                raise ValueError(f"Collection '{collection_key}' does not exist") from e
+
         self._collection_key = collection_key
 
     def _validate_api_key(self, library_type: LibraryType, library_id: str) -> None:
