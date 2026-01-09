@@ -16,7 +16,7 @@ from typing import List
 from dotenv import load_dotenv
 
 from cli.inspect import run_inspect
-from cli.parser import create_parser
+from cli.parser import parse_arguments
 from cli.rank import run_rank
 from cli.search import run_search
 from cli.slr import run_slr
@@ -25,6 +25,7 @@ from cli.upload import run_upload
 from config.parser import Config, DEFAULT_CONFIG_PATH
 from db.paper_database import PaperDatabase
 from util.logger import logger, Level
+
 
 async def _execute(db: PaperDatabase, config: Config, args: Namespace) -> None:
     """
@@ -114,7 +115,7 @@ def main() -> None:
     """
     Parse initial arguments and execute commands
     """
-    args = create_parser().parse_args()
+    args = parse_arguments()
     # set logging level
     if args.silent:
         # silent override all

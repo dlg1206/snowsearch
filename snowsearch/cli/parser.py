@@ -5,7 +5,7 @@ Description: CLI command parser
 @author Derek Garcia
 """
 
-from argparse import ArgumentParser
+from argparse import ArgumentParser, Namespace
 
 from util.logger import Level, DEFAULT_LOG_LEVEL
 
@@ -107,6 +107,51 @@ def _add_ignore_quota_process_flag_arg(command) -> None:
                          help="Do not retry to process additional papers to meet the round paper quota")
 
 
+def _add_zotero_flag_args(command) -> None:
+    """
+    Add zotero flag arguments to command
+
+    :param command: Command to add arg to
+    """
+    command.add_argument('-z', '--zotero-id',
+                         metavar="<zotero-id>",
+                         type=str,
+                         help="User ID for use in Zotero API calls. The User ID can be found here: https://www.zotero.org/settings/keys")
+    lib_group = command.add_mutually_exclusive_group()
+    lib_group.add_argument('-zu', '--zotero-user-library',
+                           metavar="<collection-id>",
+                           type=str,
+                           nargs='?',
+                           help="Upload to personal Zotero library. To upload to a specific collection, provide a collection ID")
+    lib_group.add_argument('-zg', '--zotero-group-library',
+                           metavar="<group-id>",
+                           type=str,
+                           nargs=1,
+                           help="Upload to a group Zotero library. The library must be private and user must have write access")
+
+
+#
+# Custom validation
+#
+
+def _validate_zotero_args(parser: ArgumentParser, args: Namespace) -> None:
+    """
+    Validate the usage of the Zotero args
+
+    :param parser: Parser used to parse cli args
+    :param args: Args to verify
+    :raises ParseError: If all required flags are not present
+    """
+    # Custom validation: Ensure that if either -zu or -zg is present, -z must be present
+    if (args.zotero_user_library or args.zotero_group_library) and not args.zotero_id:
+        parser.error("The argument --zotero-id (-z) must be specified when uploading to a Zotero library.")
+
+    # Ensure -z is present if either -zu or -zg is provided
+    if args.zotero_id and not (args.zotero_user_library or args.zotero_group_library):
+        parser.error(
+            "The argument --zotero-user-library (-zu) or --zotero-group-library (-zg) must be specified with --zotero-id (-z).")
+
+
 #
 # Commands
 #
@@ -123,6 +168,7 @@ def _add_slr_command(root_command) -> None:
     # add generic args
     _add_semantic_search_arg(slr)
     _add_ignore_quota_process_flag_arg(slr)
+    _add_zotero_flag_args(slr)
 
     # add unique args
     slr.add_argument('-q', '--query',
@@ -176,6 +222,7 @@ def _add_search_command(root_command) -> None:
     _add_limit_flag_arg(search)
     _add_min_similarity_score_flag_arg(search)
     _add_json_flag_arg(search)
+    _add_zotero_flag_args(search)
 
     # add unique args
     search.add_argument('--only-open-access',
@@ -222,6 +269,7 @@ def _add_rank_command(root_command) -> None:
     _add_limit_flag_arg(rank)
     _add_min_similarity_score_flag_arg(rank)
     _add_json_flag_arg(rank)
+    _add_zotero_flag_args(rank)
 
     rank_group = rank.add_mutually_exclusive_group()
     _add_paper_titles_flag_arg(rank_group)
@@ -248,7 +296,7 @@ def _add_upload_command(root_command) -> None:
                               help="Path to root directory of pdf files to upload")
 
 
-def create_parser() -> ArgumentParser:
+def parse_arguments() -> Namespace:
     """
     Create the Arg parser
 
@@ -287,4 +335,9 @@ def create_parser() -> ArgumentParser:
     _add_rank_command(commands)  # rank command - use llm to rank papers
     _add_upload_command(commands)  # upload command - upload local pdfs to the database
 
-    return parser
+    args = parser.parse_args()
+    # custom validation
+    _validate_zotero_args(parser, args)
+
+    # args ok
+    return args
