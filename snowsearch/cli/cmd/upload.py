@@ -8,7 +8,6 @@ Description: Upload local pdf papers to be stored in the database
 
 from typing import List
 
-from config.parser import Config
 from db.paper_database import PaperDatabase
 from dto.grobid_dto import GrobidDTO
 from dto.paper_dto import PaperDTO
@@ -20,12 +19,16 @@ from util.timer import Timer
 from util.verify import validate_file_is_pdf
 
 
-async def run_upload(db: PaperDatabase, config: Config, paper_pdf_paths: List[str]) -> None:
+async def run_upload(db: PaperDatabase,
+                     openalex_client: OpenAlexClient,
+                     grobid_worker: GrobidWorker,
+                     paper_pdf_paths: List[str]) -> None:
     """
     Upload local pdf papers to be stored in the database
 
     :param db: Database to store paper results in
-    :param config: Config details for performing the search
+    :param openalex_client: Client to make requests to OpenAlex
+    :param grobid_worker: Client to make requests to Grobid server
     :param paper_pdf_paths: List of paths to pdfs to upload
     """
     # verify files
@@ -40,14 +43,6 @@ async def run_upload(db: PaperDatabase, config: Config, paper_pdf_paths: List[st
     # error if nothing to process
     if not valid_paper_files:
         raise ValueError("No valid pdfs to upload")
-
-    # init grobid client
-    grobid_worker = GrobidWorker(
-        config.grobid.max_grobid_requests,
-        config.grobid.max_concurrent_downloads,
-        config.grobid.max_local_pdfs,
-        config.grobid.client_params
-    )
 
     # preempt model load
     db.load_embedding_model()
@@ -79,7 +74,6 @@ async def run_upload(db: PaperDatabase, config: Config, paper_pdf_paths: List[st
             num_fail_process += 1
 
     # fetch paper metadata
-    openalex_client = OpenAlexClient(config.openalex.email)
     n_metadata_found = await openalex_client.fetch_and_save_paper_metadata(db, papers)
     # fetch citation metadata
     citations = set()  # use set to prevent dupe citations

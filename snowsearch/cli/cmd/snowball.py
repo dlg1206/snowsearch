@@ -8,7 +8,7 @@ Description: Perform rounds of snowballing from the cli
 
 from typing import List, Tuple
 
-from config.parser import Config
+from config.parser import SnowballConfigDTO
 from db.paper_database import PaperDatabase
 from dto.paper_dto import PaperDTO
 from grobid.worker import GrobidWorker
@@ -119,7 +119,10 @@ async def snowball(db: PaperDatabase, openalex_client: OpenAlexClient, grobid_wo
     return processed_papers, new_citations
 
 
-async def run_snowball(db: PaperDatabase, config: Config,
+async def run_snowball(db: PaperDatabase,
+                       snowball_config: SnowballConfigDTO,
+                       openalex_client: OpenAlexClient,
+                       grobid_worker: GrobidWorker,
                        nl_query: str = None,
                        round_quota: int = None,
                        seed_paper_titles: List[str] = None,
@@ -128,22 +131,14 @@ async def run_snowball(db: PaperDatabase, config: Config,
     Run the snowball process
 
     :param db: Database to fetch details and save paper data to
-    :param config: Config details for performing the search
+    :param snowball_config: Config details for performing the snowball search
+    :param openalex_client: Client to make requests to OpenAlex
+    :param grobid_worker: Client to make requests to Grobid server
     :param nl_query: Natural language search query to match relevant papers (Default: None)
     :param round_quota: Number of papers to attempt to process per round (Default: All papers)
     :param seed_paper_titles: List of paper titles to start snowballing with (Default: None)
     :param ignore_quota: Skip fetching more papers to process if did not meet round quota round (Default: False)
     """
-
-    # init OpenAlex client
-    openalex_client = OpenAlexClient(config.openalex.email)
-    # init grobid client
-    grobid_worker = GrobidWorker(
-        config.grobid.max_grobid_requests,
-        config.grobid.max_concurrent_downloads,
-        config.grobid.max_local_pdfs,
-        config.grobid.client_params
-    )
 
     # fetch seed papers
     if seed_paper_titles:
@@ -158,20 +153,20 @@ async def run_snowball(db: PaperDatabase, config: Config,
                                                    unprocessed=True,
                                                    only_open_access=True,
                                                    paper_limit=round_quota,
-                                                   min_score=config.snowball.min_similarity_score)
+                                                   min_score=snowball_config.min_similarity_score)
     else:
         logger.debug_msg("Using default unprocessed papers")
         seed_papers = db.get_unprocessed_papers(round_quota)
 
     # perform N rounds of snowballing
     timer = Timer()
-    logger.info(f"Starting {config.snowball.rounds} rounds of snowballing")
+    logger.info(f"Starting {snowball_config.rounds} rounds of snowballing")
     logger.info(f"Starting snowball with {len(seed_papers)} seed papers")
     processed_papers, new_citations = await snowball(db, openalex_client, grobid_worker,
-                                                     config.snowball.rounds, seed_papers,
+                                                     snowball_config.rounds, seed_papers,
                                                      nl_query=nl_query,
                                                      round_quota=round_quota,
-                                                     min_similarity_score=config.snowball.min_similarity_score,
+                                                     min_similarity_score=snowball_config.min_similarity_score,
                                                      ignore_quota=ignore_quota,
                                                      seed_provided=bool(seed_paper_titles))
 

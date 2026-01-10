@@ -15,13 +15,14 @@ from typing import List
 
 from dotenv import load_dotenv
 
-from cli.inspect import run_inspect
+from cli.client_factory import ClientFactory
+from cli.cmd.inspect import run_inspect
+from cli.cmd.rank import run_rank
+from cli.cmd.search import run_search
+from cli.cmd.slr import run_slr
+from cli.cmd.snowball import run_snowball
+from cli.cmd.upload import run_upload
 from cli.parser import parse_arguments
-from cli.rank import run_rank
-from cli.search import run_search
-from cli.slr import run_slr
-from cli.snowball import run_snowball
-from cli.upload import run_upload
 from config.parser import Config, DEFAULT_CONFIG_PATH
 from db.paper_database import PaperDatabase
 from util.logger import logger, Level
@@ -46,10 +47,11 @@ async def _execute(db: PaperDatabase, config: Config, args: Namespace) -> None:
         with open(csv_path, 'r', encoding='utf-8') as f:
             return list({r[0] for r in csv.reader(f)})
 
+    cf = ClientFactory(config)
     match args.command:
         case 'slr':
             # todo - log if fail to connect to ollama / openai
-            await run_slr(db, config, args.semantic_search,
+            await run_slr(db, config, cf, args.semantic_search,
                           oa_query=args.query,
                           skip_paper_ranking=args.skip_ranking,
                           json_output=args.json,
@@ -65,7 +67,7 @@ async def _execute(db: PaperDatabase, config: Config, args: Namespace) -> None:
                 papers = list(set(args.papers))
 
             # start snowball
-            await run_snowball(db, config,
+            await run_snowball(db, config.snowball, cf.create_openalex_client(), cf.create_grobid_worker(),
                                nl_query=args.semantic_search,
                                round_quota=round_quota,
                                seed_paper_titles=papers,
@@ -99,16 +101,16 @@ async def _execute(db: PaperDatabase, config: Config, args: Namespace) -> None:
             min_score = rank_config.min_abstract_score if args.min_similarity_score is None \
                 else args.min_similarity_score
 
-            await run_rank(db, rank_config, args.semantic_search,
+            await run_rank(db, cf.create_rank_client(), config.ranking.tokens_per_word, args.semantic_search,
                            top_n_papers,
                            min_score,
                            json_output=args.json,
                            paper_titles_to_rank=papers)
         case 'upload':
             # set file paths
-            paper_pdf_paths = [args.file] if args.file else [str(f) for f in Path(args.directory).iterdir() if
-                                                             f.is_file()]
-            await run_upload(db, config, paper_pdf_paths)
+            paper_pdf_paths = [args.file] if args.file \
+                else [str(f) for f in Path(args.directory).iterdir() if f.is_file()]
+            await run_upload(db, cf.create_openalex_client(), cf.create_grobid_worker(), paper_pdf_paths)
 
 
 def main() -> None:

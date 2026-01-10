@@ -5,23 +5,21 @@ Description: Orchestrate entire strategic literature review pipeline
 @author Derek Garcia
 """
 
-import os
-from dataclasses import asdict
+from cli.client_factory import ClientFactory
 
-from ai.ollama import OllamaClient
-from ai.openai import OpenAIClient, OPENAI_API_KEY_ENV
-from cli.rank import rank_papers
-from cli.snowball import snowball
+from cli.cmd.snowball import snowball
 from config.parser import Config
 from db.paper_database import PaperDatabase
-from grobid.worker import GrobidWorker
-from openalex.client import OpenAlexClient
+from rank.abstract_ranker import AbstractRanker
 from util.logger import logger
 from util.output import write_papers_to_json, print_ranked_papers
 from util.timer import Timer
 
 
-async def run_slr(db: PaperDatabase, config: Config, nl_query: str,
+async def run_slr(db: PaperDatabase,
+                  config: Config,
+                  client_factory: ClientFactory,
+                  nl_query: str,
                   oa_query: str = None,
                   skip_paper_ranking: bool = False,
                   json_output: str = None,
@@ -31,22 +29,16 @@ async def run_slr(db: PaperDatabase, config: Config, nl_query: str,
 
     :param db: Database to store paper results in
     :param config: Config details for performing the search
+    :param client_factory: Factory for generating clients as needed
     :param nl_query: Natural language search query to match papers to
     :param oa_query: Elasticsearch-like query to use for search OpenAlex instead of generating one (Default: None)
     :param skip_paper_ranking: Skip ranking the most relevant papers using an LLM after snowballing (Default: False)
     :param json_output: Path to save results to instead of printing to stdout (Default: None)
     :param ignore_quota: Skip fetching more papers to process if did not meet round quota round (Default: False)
     """
-    # init OpenAlex client
-    openalex_client = OpenAlexClient(config.openalex.email)
-
-    # init grobid client
-    grobid_worker = GrobidWorker(
-        config.grobid.max_grobid_requests,
-        config.grobid.max_concurrent_downloads,
-        config.grobid.max_local_pdfs,
-        config.grobid.client_params
-    )
+    # init clients
+    openalex_client = client_factory.create_openalex_client()
+    grobid_worker = client_factory.create_grobid_worker()
 
     # init run
     db.load_embedding_model()  # preempt model load
@@ -59,8 +51,7 @@ async def run_slr(db: PaperDatabase, config: Config, nl_query: str,
         logger.info(f"Using provided OpenAlex | {oa_query}")
         db.insert_openalex_query(run_id, None, nl_query, oa_query)
     else:
-        oa_query_model = OpenAIClient(config.query_generation.model_name, config.query_generation.context_window) \
-            if os.getenv(OPENAI_API_KEY_ENV) else OllamaClient(**asdict(config.query_generation))
+        oa_query_model = client_factory.create_query_generation_client()
         oa_query = await openalex_client.generate_openalex_query(oa_query_model, nl_query)
         db.insert_openalex_query(run_id, oa_query_model.model, nl_query, oa_query)
 
@@ -116,7 +107,9 @@ async def run_slr(db: PaperDatabase, config: Config, nl_query: str,
         return
 
     # rank and print output
-    ranked_papers = await rank_papers(config.ranking, nl_query, papers)
+    ranker = AbstractRanker(client_factory.create_rank_client(), config.ranking.tokens_per_word)
+    ranked_papers = await ranker.rank_paper_abstracts(nl_query, papers)
+
     if json_output:
         model = f"{config.ranking.agent_config.model_name}:{config.ranking.agent_config.model_tag}"
         json_output = write_papers_to_json(db, json_output, ranked_papers, model_used=model, nl_query=nl_query)
