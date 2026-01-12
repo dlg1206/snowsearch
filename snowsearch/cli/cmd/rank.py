@@ -10,6 +10,7 @@ from typing import List
 
 from ai.model import ModelClient
 from db.paper_database import PaperDatabase
+from db.zotero import ZoteroClient
 from rank.abstract_ranker import AbstractRanker
 from util.logger import logger
 from util.output import write_papers_to_json, print_ranked_papers
@@ -23,7 +24,8 @@ async def run_rank(db: PaperDatabase,
                    paper_limit: int,
                    min_similarity_score: float,
                    json_output: str = None,
-                   paper_titles_to_rank: List[str] = None) -> None:
+                   paper_titles_to_rank: List[str] = None,
+                   zotero_client: ZoteroClient = None) -> None:
     """
     Use an LLM to rank papers based on their relevance to the query.
 
@@ -35,6 +37,7 @@ async def run_rank(db: PaperDatabase,
     :param json_output: Path to save results to instead of printing to stdout (Default: None)
     :param min_similarity_score: Minimum similarity score for filter cutoff (Default: None)
     :param paper_titles_to_rank: List of papers to rank (Default: None)
+    :param zotero_client: Client to use to upload resulting papers to zotero (Default: None)
     """
     # get papers from database if provided
     if paper_titles_to_rank:
@@ -64,3 +67,7 @@ async def run_rank(db: PaperDatabase,
     else:
         # pretty print results
         print_ranked_papers(db, ranked_papers, include_abstract=True, nl_query=nl_query)
+
+    # upload papers if created
+    if zotero_client:
+        await zotero_client.upload_papers(ranked_papers)

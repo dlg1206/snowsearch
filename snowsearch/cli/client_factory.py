@@ -7,11 +7,13 @@ Description: Util factory to streaming the creation of Client interfaces
 """
 import os
 from dataclasses import asdict
+from multiprocessing.managers import Namespace
 
 from ai.model import ModelClient
 from ai.ollama import OllamaClient
 from ai.openai import OpenAIClient, OPENAI_API_KEY_ENV, InvalidAPIKeyError
 from config.parser import Config, AgentConfigDTO
+from db.zotero import LibraryType, ZoteroClient
 from grobid.worker import GrobidWorker
 from openalex.client import OpenAlexClient
 from util.logger import logger
@@ -58,6 +60,23 @@ class ClientFactory:
         :return: Model Client for ranking papers
         """
         return _create_model_client(self._config.ranking.agent_config)
+
+    @staticmethod
+    def create_zotero_client(args: Namespace) -> ZoteroClient | None:
+        """
+        Create new Zotero Client from args
+
+        :param args: Argument object with zotero args
+        :return: ZoteroClient or None if required args are missing
+        """
+        if args.zotero_group_library:
+            return ZoteroClient(args.zotero_group_library, LibraryType.GROUP)
+        elif args.zotero_user_library:
+            # user library
+            return ZoteroClient(args.zotero_user_library, LibraryType.USER, args.zotero_collection)
+        else:
+            # required args not present
+            return None
 
 
 def _create_model_client(agent_config: AgentConfigDTO) -> ModelClient:

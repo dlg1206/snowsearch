@@ -48,6 +48,7 @@ async def _execute(db: PaperDatabase, config: Config, args: Namespace) -> None:
             return list({r[0] for r in csv.reader(f)})
 
     cf = ClientFactory(config)
+
     match args.command:
         case 'slr':
             # todo - log if fail to connect to ollama / openai
@@ -55,7 +56,8 @@ async def _execute(db: PaperDatabase, config: Config, args: Namespace) -> None:
                           oa_query=args.query,
                           skip_paper_ranking=args.skip_ranking,
                           json_output=args.json,
-                          ignore_quota=args.ignore_quota)
+                          ignore_quota=args.ignore_quota,
+                          zotero_client=cf.create_zotero_client(args))
         case 'snowball':
             # load args
             round_quota = None if args.no_limit else config.snowball.round_quota
@@ -74,14 +76,19 @@ async def _execute(db: PaperDatabase, config: Config, args: Namespace) -> None:
                                ignore_quota=args.ignore_quota)
 
         case 'search':
-            run_search(db, args.semantic_search,
-                       paper_limit=args.limit,
-                       exact_match=args.exact_match,
-                       only_open_access=args.only_open_access,
-                       only_processed=args.only_processed,
-                       min_similarity_score=args.min_similarity_score,
-                       order_by_abstract=args.order_by_abstract,
-                       json_output=args.json)
+            papers = run_search(db, args.semantic_search,
+                                paper_limit=args.limit,
+                                exact_match=args.exact_match,
+                                only_open_access=args.only_open_access,
+                                only_processed=args.only_processed,
+                                min_similarity_score=args.min_similarity_score,
+                                order_by_abstract=args.order_by_abstract,
+                                json_output=args.json)
+
+            # upload papers if args provided
+            zc = cf.create_zotero_client(args)
+            if zc:
+                await zc.upload_papers(papers)
 
         case 'inspect':
             run_inspect(db, args.paper_title)
@@ -106,6 +113,7 @@ async def _execute(db: PaperDatabase, config: Config, args: Namespace) -> None:
                            min_score,
                            json_output=args.json,
                            paper_titles_to_rank=papers)
+
         case 'upload':
             # set file paths
             paper_pdf_paths = [args.file] if args.file \

@@ -10,6 +10,7 @@ from cli.client_factory import ClientFactory
 from cli.cmd.snowball import snowball
 from config.parser import Config
 from db.paper_database import PaperDatabase
+from db.zotero import ZoteroClient
 from rank.abstract_ranker import AbstractRanker
 from util.logger import logger
 from util.output import write_papers_to_json, print_ranked_papers
@@ -23,7 +24,8 @@ async def run_slr(db: PaperDatabase,
                   oa_query: str = None,
                   skip_paper_ranking: bool = False,
                   json_output: str = None,
-                  ignore_quota: bool = False) -> None:
+                  ignore_quota: bool = False,
+                  zotero_client: ZoteroClient = None) -> None:
     """
     Perform a full literature search
 
@@ -35,6 +37,7 @@ async def run_slr(db: PaperDatabase,
     :param skip_paper_ranking: Skip ranking the most relevant papers using an LLM after snowballing (Default: False)
     :param json_output: Path to save results to instead of printing to stdout (Default: None)
     :param ignore_quota: Skip fetching more papers to process if did not meet round quota round (Default: False)
+    :param zotero_client: Client to use to upload resulting papers to zotero (Default: None)
     """
     # init clients
     openalex_client = client_factory.create_openalex_client()
@@ -121,3 +124,7 @@ async def run_slr(db: PaperDatabase,
     # end run
     db.end_run(run_id)
     logger.info(f"Completed strategic literature review in {slt_timer.format_time()}s")
+
+    # upload papers if created
+    if zotero_client:
+        await zotero_client.upload_papers(papers)

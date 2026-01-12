@@ -5,6 +5,7 @@ Description: Client for interacting with a zotero library
 
 @author Derek Garcia
 """
+import logging
 import os
 from enum import Enum
 from os.path import exists
@@ -21,6 +22,9 @@ from dto.paper_dto import PaperDTO
 from util.logger import logger
 
 ZOTERO_API_KEY_ENV = "ZOTERO_API_KEY"
+
+# suppress http msgs
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
 class LibraryType(Enum):
@@ -82,13 +86,14 @@ class ZoteroClient:
         self._zot = Zotero(library_id, library_type.value, os.getenv(ZOTERO_API_KEY_ENV))
         self._validate_api_key(library_type, library_id)
         # todo make list to support multiple collections
-        if collection_key:
+        if library_type == LibraryType.GROUP and collection_key:
+            logger.warn("Group libraries do not support collection keys, omitting. . .")
+        elif collection_key:
             try:
                 self._zot.collection(collection_key)
+                self._collection_key = collection_key
             except ResourceNotFoundError as e:
                 raise ValueError(f"Collection '{collection_key}' does not exist") from e
-
-        self._collection_key = collection_key
 
     def _validate_api_key(self, library_type: LibraryType, library_id: str) -> None:
         """

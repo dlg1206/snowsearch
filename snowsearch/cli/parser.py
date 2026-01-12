@@ -113,21 +113,23 @@ def _add_zotero_flag_args(command) -> None:
 
     :param command: Command to add arg to
     """
-    command.add_argument('-z', '--zotero-id',
-                         metavar="<zotero-id>",
-                         type=str,
-                         help="User ID for use in Zotero API calls. The User ID can be found here: https://www.zotero.org/settings/keys")
     lib_group = command.add_mutually_exclusive_group()
     lib_group.add_argument('-zu', '--zotero-user-library',
-                           metavar="<collection-id>",
+                           metavar="<zotero-id>",
                            type=str,
-                           nargs='?',
-                           help="Upload to personal Zotero library. To upload to a specific collection, provide a collection ID")
+                           help="Upload to personal Zotero library. The User ID can be found here: https://www.zotero.org/settings/keys")
+
     lib_group.add_argument('-zg', '--zotero-group-library',
                            metavar="<group-id>",
                            type=str,
                            nargs=1,
                            help="Upload to a group Zotero library. The library must be private and user must have write access")
+
+    command.add_argument('-zc', '--zotero-collection',
+                         metavar="<collection-id>",
+                         type=str,
+                         nargs='?',
+                         help="Collection ID to a specific collection")
 
 
 #
@@ -142,14 +144,9 @@ def _validate_zotero_args(parser: ArgumentParser, args: Namespace) -> None:
     :param args: Args to verify
     :raises ParseError: If all required flags are not present
     """
-    # Custom validation: Ensure that if either -zu or -zg is present, -z must be present
-    if (args.zotero_user_library or args.zotero_group_library) and not args.zotero_id:
-        parser.error("The argument --zotero-id (-z) must be specified when uploading to a Zotero library.")
-
-    # Ensure -z is present if either -zu or -zg is provided
-    if args.zotero_id and not (args.zotero_user_library or args.zotero_group_library):
-        parser.error(
-            "The argument --zotero-user-library (-zu) or --zotero-group-library (-zg) must be specified with --zotero-id (-z).")
+    # Custom validation: Ensure that collection not used with group
+    if args.zotero_group_library and args.zotero_collection:
+        parser.error("The argument --zotero-collection (-zc) cannot be used with --zotero-group-library (-zg)")
 
 
 #

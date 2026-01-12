@@ -84,7 +84,7 @@ def run_search(db: PaperDatabase, nl_query: str,
                only_processed: bool = False,
                min_similarity_score: float = None,
                order_by_abstract: bool = False,
-               json_output: str = None) -> None:
+               json_output: str = None) -> List[PaperDTO]:
     """
     Run a search in the neo4j database
 
@@ -97,6 +97,7 @@ def run_search(db: PaperDatabase, nl_query: str,
     :param min_similarity_score: Minimum similarity score for filter cutoff (Default: None)
     :param order_by_abstract: Return search order by abstract match then title match (Default: False)
     :param json_output: Path to save results to instead of printing to stdout (Default: None)
+    :return: List of resulting papers
     """
     logger.info("Searching database")
 
@@ -112,12 +113,13 @@ def run_search(db: PaperDatabase, nl_query: str,
                                                  paper_limit=paper_limit)
         if not papers:
             logger.warn(f"Found no paper titles that contain the term '{nl_query}'")
+        else:
+            logger.info(f"Found {len(papers)} paper titles that contain the term '{nl_query}'")
         # highlight matches
         for p in papers:
             p.id = re.sub(rf'{nl_query}', _highlight, p.id, flags=re.IGNORECASE)
-        # print
-        print_ranked_papers(db, papers, include_abstract=True)
     else:
+        # todo add heartbeat
         papers = db.search_papers_by_nl_query(nl_query,
                                               # if abstract then processed by grobid
                                               require_abstract=only_processed,
@@ -134,3 +136,5 @@ def run_search(db: PaperDatabase, nl_query: str,
     else:
         # pretty print results
         print_ranked_papers(db, papers, include_abstract=True, nl_query=nl_query)
+
+    return papers
