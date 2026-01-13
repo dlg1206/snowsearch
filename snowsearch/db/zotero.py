@@ -134,7 +134,8 @@ class ZoteroClient:
                         "Zotero API key has notes access but not needed for SnowSearch, considered removing access")
                 if 'group' in permissions['access']:
                     logger.warn(
-                        "Zotero API key has access to group libraries but configured to use for personal libraries, considered removing access")
+                        "Zotero API key has access to group libraries but configured to "
+                        "use for personal libraries, considered removing access")
 
             # validate group library params
             else:
@@ -150,13 +151,16 @@ class ZoteroClient:
                 # warn if excessive permissions
                 if key == 'all':
                     logger.warn(
-                        f"Using default group permissions, consider defining permissions for only group library '{library_id}'")
+                        f"Using default group permissions, consider defining permissions "
+                        f"for only group library '{library_id}'")
                 if key == library_id and len(groups_perms) > 1:
                     logger.warn(
-                        f"Zotero API key has access to other group libraries but configured to use group library '{library_id}', considered removing access")
+                        f"Zotero API key has access to other group libraries but configured to "
+                        f"use group library '{library_id}', considered removing access")
                 if 'user' in permissions['access']:
                     logger.warn(
-                        "Zotero API key has access to personal library but configured to use group libraries, considered removing access")
+                        "Zotero API key has access to personal library but configured to "
+                        "use group libraries, considered removing access")
 
             logger.debug_msg("Zotero API key has sufficient permissions")
         except UserNotAuthorisedError as e:
@@ -236,18 +240,24 @@ class ZoteroClient:
                 tasks = []
                 # find only new papers
                 for p in papers:
-                    if p.doi:
-                        # DOI is available and not already added
-                        if p.doi.lower() not in existing_doi:
-                            tasks.append(self._create_zotero_item_task(session, p, work_dir))
-                        else:
-                            logger.debug_msg(f"Skipping duplicate DOI '{p.doi}'")
-                    else:
-                        # DOI is not available and title not already added
-                        if p.id.lower() not in existing_titles:
-                            tasks.append(self._create_zotero_item_task(session, p, work_dir))
-                        else:
-                            logger.debug_msg(f"Skipping duplicate title '{p.id}'")
+                    # Use DOI if available; otherwise fall back to the paper ID (title)
+                    key = (p.doi or p.id).lower()
+
+                    # Select the appropriate existing set to check for duplicates
+                    # - existing_doi for papers with a DOI
+                    # - existing_titles for papers without a DOI
+                    existing = existing_doi if p.doi else existing_titles
+
+                    # Human-readable label for logging
+                    label = "DOI" if p.doi else "title"
+
+                    # Skip papers that have already been added
+                    if key in existing:
+                        logger.debug_msg(f"Skipping duplicate {label} '{key}'")
+                        continue
+
+                    # Create a task to add the new paper to Zotero
+                    tasks.append(self._create_zotero_item_task(session, p, work_dir))
 
                 # exit early if nothing new to add
                 if not tasks:
@@ -268,7 +278,7 @@ class ZoteroClient:
                     logger.warn("Some items failed to be created")
 
             # exit early if nothing to upload
-            if not len(os.listdir(work_dir)):
+            if len(os.listdir(work_dir)) == 0:
                 logger.info("No PDFs to upload")
                 return
 

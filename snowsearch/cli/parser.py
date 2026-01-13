@@ -117,13 +117,15 @@ def _add_zotero_flag_args(command) -> None:
     lib_group.add_argument('-zu', '--zotero-user-library',
                            metavar="<zotero-id>",
                            type=str,
-                           help="Upload to personal Zotero library. The User ID can be found here: https://www.zotero.org/settings/keys")
+                           help="Upload to personal Zotero library. "
+                                "The User ID can be found here: https://www.zotero.org/settings/keys")
 
     lib_group.add_argument('-zg', '--zotero-group-library',
                            metavar="<group-id>",
                            type=str,
                            nargs=1,
-                           help="Upload to a group Zotero library. The library must be private and user must have write access")
+                           help="Upload to a group Zotero library. "
+                                "The library must be private and user must have write access")
 
     command.add_argument('-zc', '--zotero-collection',
                          metavar="<collection-id>",
@@ -172,7 +174,8 @@ def _add_slr_command(root_command) -> None:
                      metavar="<query>",
                      type=str,
                      help="OpenAlex formatted query to use directly. "
-                          "See https://docs.openalex.org/how-to-use-the-api/get-lists-of-entities/search-entities#boolean-searches for formatting rules")  # skip llm generation step
+                          "See https://docs.openalex.org/how-to-use-the-api/get-lists-of-entities/search-entities#boolean-searches "
+                          "for formatting rules")  # skip llm generation step
 
     slr_group = slr.add_mutually_exclusive_group()
     _add_json_flag_arg(slr_group)

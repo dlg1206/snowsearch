@@ -69,14 +69,16 @@ class ClientFactory:
         :param args: Argument object with zotero args
         :return: ZoteroClient or None if required args are missing
         """
+        # user library
+        if args.zotero_user_library:
+            return ZoteroClient(args.zotero_user_library, LibraryType.USER, args.zotero_collection)
+
+        # group library
         if args.zotero_group_library:
             return ZoteroClient(args.zotero_group_library, LibraryType.GROUP)
-        elif args.zotero_user_library:
-            # user library
-            return ZoteroClient(args.zotero_user_library, LibraryType.USER, args.zotero_collection)
-        else:
-            # required args not present
-            return None
+
+        # required args not present
+        return None
 
 
 def _create_model_client(agent_config: AgentConfigDTO) -> ModelClient:
