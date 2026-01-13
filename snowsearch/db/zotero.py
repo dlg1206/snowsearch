@@ -20,6 +20,7 @@ from download.exception import NoFileDataError, InvalidFileFormatError, PaperDow
 from download.pdf import download_pdf
 from dto.paper_dto import PaperDTO
 from util.logger import logger
+from util.timer import Timer
 
 ZOTERO_API_KEY_ENV = "ZOTERO_API_KEY"
 
@@ -227,7 +228,7 @@ class ZoteroClient:
 
         :param papers: List of papers to upload
         """
-
+        timer = Timer()
         existing_doi, existing_titles = self._fetch_existing_items()
         new_zot_items = []
         with TemporaryDirectory(prefix='zotero-') as work_dir:
@@ -286,3 +287,4 @@ class ZoteroClient:
             # upload pdfs
             self._zot.upload_attachments(attachments, basedir=work_dir)
             logger.info("PDFs uploaded")
+            logger.info(f"Completed upload process in {timer.format_time()}s")
