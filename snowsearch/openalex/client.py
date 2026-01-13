@@ -143,7 +143,7 @@ class OpenAlexClient:
         """
         # make request
         params = {'filter': f"doi:{f'|{DOI_PREFIX}'.join(doi_batch)}"}
-        results: Dict[str, Any] = await self._fetch(session, f"works", params, per_page=MAX_DOI_PER_PAGE)
+        results: Dict[str, Any] = await self._fetch(session, "works", params, per_page=MAX_DOI_PER_PAGE)
 
         # process results
         missing_doi_ids = set(doi_batch)

@@ -5,10 +5,11 @@
 
 ### ✨ Features
 
-- 🔍 Automated paper search
-- 🧠 LLM natural language → structured query generation
-- 📊 LLM-based abstract ranking
-- 🚀 GPU support
+- 🔍 Automated Paper Search
+- 🧠 Natural Language Search → Structured Query Generation
+- 📊 LLM-based Abstract Reliance Ranking
+- 📚 Export to Zotero Libraries [^1]
+- 🚀 GPU Support
 
 ### Table of Contents
 
@@ -16,6 +17,7 @@
 - [Accessing the Database](#accessing-the-database)
 - [Enabling GPU Access](#enabling-gpu-access)
 - [Local Deployment and Development](#local-deployment-and-development)
+- [Usage Tips and Tricks](#usage-tips-and-tricks)
 - [Acknowledgments](#acknowledgments)
 - [Questions or Issues?](#questions-or-issues)
 
@@ -130,12 +132,24 @@ The help menu should show.
 The compose services will also need to be running, which you can launch like so:
 
 ```bash
-docker compose up -f compose.yaml -f override/dev.yaml
+docker compose -f compose.yaml -f override/dev.yaml up
 ```
 
 This will open up all service ports so scripts run on your machine will be able to access them through `localhost` and
 their respective ports. For working with the database, see the [database doc](docs/database.md) for a rundown to how objects have been 
 structured.
+
+## Usage Tips and Tricks
+
+### Model Selection
+During development, smaller models struggled to perform well. There is retry logic in place, but if prompt generation or
+ abstract ranking fail repeatedly, consider using a model with a larger context window.
+
+### Natural Language Query
+Try to be as descriptive and specific as possible when creating using a semantic or natural language search query. 
+Single quotes ('') can be used for exact matches for key terms. If no results appear, then generalize your search. A 
+good strategy is to keep the search domain specific but broad, then use `snowball` and `search` commands to filter any 
+non-related papers.
 
 ## Acknowledgments
 
@@ -153,3 +167,5 @@ This toolchain would not be possible without these amazing projects, be sure to 
 
 If you encounter a bug, have a question, or want to suggest a feature, feel free to open a GitHub issue!
 For contributing, see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+[^1]: Some limitations apply, see the [limitations](docs/zotero.md#limitations) section for details

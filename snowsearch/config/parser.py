@@ -13,7 +13,8 @@ from typing import Dict, Any, List
 import yaml
 
 from config.default import OllamaDefaults, AgentDefaults, AbstractRankingDefaults, GrobidDefaults, SnowballDefaults
-from grobid.config import MAX_CONCURRENT_DOWNLOADS, MAX_PDF_COUNT
+from download.config import MAX_PDF_COUNT
+from grobid.config import MAX_CONCURRENT_DOWNLOADS
 from util.logger import logger
 
 DEFAULT_CONFIG_PATH = "config.yaml"
@@ -40,9 +41,9 @@ class AgentConfigDTO:
         self.model_name = self.model_name or os.getenv('SS_AGENT_MODEL', AgentDefaults.MODEL)
         self.model_tag = self.model_tag or os.getenv('SS_AGENT_TAG', AgentDefaults.TAG)
         self.context_window = int(
-            self.context_window or os.getenv('SS_AGENT_CONTEXT_WINDOW', AgentDefaults.CONTEXT_WINDOW))
-        self.ollama_host = self.ollama_host or os.getenv('SS_OLLAMA_HOST', OllamaDefaults.OLLAMA_HOST)
-        self.ollama_port = int(self.ollama_port or os.getenv('SS_OLLAMA_PORT', OllamaDefaults.OLLAMA_PORT))
+            self.context_window or os.getenv('SS_AGENT_CONTEXT_WINDOW', str(AgentDefaults.CONTEXT_WINDOW)))
+        self.ollama_host = self.ollama_host or os.getenv('SS_OLLAMA_HOST', str(OllamaDefaults.OLLAMA_HOST))
+        self.ollama_port = int(self.ollama_port or os.getenv('SS_OLLAMA_PORT', str(OllamaDefaults.OLLAMA_PORT)))
 
         # validate config
         # check port

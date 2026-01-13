@@ -8,8 +8,8 @@ Description: Util verify functions for paper matches
 
 from typing import List
 
+from download.config import KILOBYTE, PDF_MAGIC
 from dto.paper_dto import PaperDTO
-from grobid.config import KILOBYTE, PDF_MAGIC
 
 
 def validate_all_papers_found(paper_titles: List[str], found_papers: List[PaperDTO]) -> List[str]:

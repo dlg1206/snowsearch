@@ -7,13 +7,28 @@ Description: Format papers to stdout and json
 """
 
 import json
+import re
 from datetime import datetime
+from re import Match
 from typing import List
 
 from tabulate import tabulate
 
 from db.paper_database import PaperDatabase
 from dto.paper_dto import PaperDTO
+
+RED = "\033[31m"
+RESET = "\033[0m"
+
+
+def _highlight(m: Match) -> str:
+    """
+    Highlight match in red
+
+    :param m: Match
+    :return: Highlighted match
+    """
+    return f"{RED}{m.group(0)}{RESET}"
 
 
 def write_papers_to_json(db: PaperDatabase, json_output: str, papers: List[PaperDTO],
@@ -71,7 +86,8 @@ def write_papers_to_json(db: PaperDatabase, json_output: str, papers: List[Paper
 
 def print_ranked_papers(db: PaperDatabase, papers: List[PaperDTO],
                         include_abstract: bool = False,
-                        nl_query: str = None) -> None:
+                        nl_query: str = None,
+                        exact_match: str = None) -> None:
     """
     Print paper details to stdout
 
@@ -79,6 +95,7 @@ def print_ranked_papers(db: PaperDatabase, papers: List[PaperDTO],
     :param papers: List of papers and their title and abstract match
     :param include_abstract: Include abstract in the output table
     :param nl_query: Natural language query to score against title and abstract if present (Default: None)
+    :param exact_match: Exact match in title to highlight (default: None)
     """
 
     headers = ['#', 'Title', 'Open Access', 'DOI', 'URL', 'OpenAlex', 'Citations']
@@ -93,26 +110,27 @@ def print_ranked_papers(db: PaperDatabase, papers: List[PaperDTO],
         headers.append('Abstract')
 
     table = []
-    for r, paper in enumerate(papers, start=1):
-
+    for r, p in enumerate(papers, start=1):
+        # highlight match if match term provided
+        title = re.sub(rf'{exact_match}', _highlight, p.id, flags=re.IGNORECASE) if exact_match else p.id
         row = [r,
-               paper.id,
-               paper.is_open_access,
-               paper.doi,
-               paper.pdf_url,
-               paper.openalex_url,
-               len(db.get_citations(paper.id))
+               title,
+               p.is_open_access,
+               p.doi,
+               p.pdf_url,
+               p.openalex_url,
+               len(db.get_citations(p.id))
                ]
 
         # add score if requested
         if nl_query:
-            title_score, abstract_score = db.get_embedding_match_score(paper.id, nl_query)
+            title_score, abstract_score = db.get_embedding_match_score(p.id, nl_query)
             row.insert(2, f"{100 * title_score:.01f}%" if title_score else None)
             row.insert(3, f"{100 * abstract_score:.01f}%" if abstract_score else None)
 
         # add abstract if requested
         if include_abstract:
-            row.append(paper.format_abstract())
+            row.append(p.format_abstract())
 
         table.append(row)
 

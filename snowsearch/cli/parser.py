@@ -5,7 +5,7 @@ Description: CLI command parser
 @author Derek Garcia
 """
 
-from argparse import ArgumentParser
+from argparse import ArgumentParser, Namespace
 
 from util.logger import Level, DEFAULT_LOG_LEVEL
 
@@ -107,6 +107,50 @@ def _add_ignore_quota_process_flag_arg(command) -> None:
                          help="Do not retry to process additional papers to meet the round paper quota")
 
 
+def _add_zotero_flag_args(command) -> None:
+    """
+    Add zotero flag arguments to command
+
+    :param command: Command to add arg to
+    """
+    lib_group = command.add_mutually_exclusive_group()
+    lib_group.add_argument('-zu', '--zotero-user-library',
+                           metavar="<zotero-id>",
+                           type=str,
+                           help="Upload to personal Zotero library. "
+                                "The User ID can be found here: https://www.zotero.org/settings/keys")
+
+    lib_group.add_argument('-zg', '--zotero-group-library',
+                           metavar="<group-id>",
+                           type=str,
+                           nargs=1,
+                           help="Upload to a group Zotero library. "
+                                "The library must be private and user must have write access")
+
+    command.add_argument('-zc', '--zotero-collection',
+                         metavar="<collection-id>",
+                         type=str,
+                         nargs='?',
+                         help="Collection ID to a specific collection")
+
+
+#
+# Custom validation
+#
+
+def _validate_zotero_args(parser: ArgumentParser, args: Namespace) -> None:
+    """
+    Validate the usage of the Zotero args
+
+    :param parser: Parser used to parse cli args
+    :param args: Args to verify
+    :raises ParseError: If all required flags are not present
+    """
+    # Custom validation: Ensure that collection not used with group
+    if args.zotero_group_library and args.zotero_collection:
+        parser.error("The argument --zotero-collection (-zc) cannot be used with --zotero-group-library (-zg)")
+
+
 #
 # Commands
 #
@@ -123,13 +167,15 @@ def _add_slr_command(root_command) -> None:
     # add generic args
     _add_semantic_search_arg(slr)
     _add_ignore_quota_process_flag_arg(slr)
+    _add_zotero_flag_args(slr)
 
     # add unique args
     slr.add_argument('-q', '--query',
                      metavar="<query>",
                      type=str,
                      help="OpenAlex formatted query to use directly. "
-                          "See https://docs.openalex.org/how-to-use-the-api/get-lists-of-entities/search-entities#boolean-searches for formatting rules")  # skip llm generation step
+                          "See https://docs.openalex.org/how-to-use-the-api/get-lists-of-entities/search-entities#boolean-searches "
+                          "for formatting rules")  # skip llm generation step
 
     slr_group = slr.add_mutually_exclusive_group()
     _add_json_flag_arg(slr_group)
@@ -176,6 +222,7 @@ def _add_search_command(root_command) -> None:
     _add_limit_flag_arg(search)
     _add_min_similarity_score_flag_arg(search)
     _add_json_flag_arg(search)
+    _add_zotero_flag_args(search)
 
     # add unique args
     search.add_argument('--only-open-access',
@@ -222,6 +269,7 @@ def _add_rank_command(root_command) -> None:
     _add_limit_flag_arg(rank)
     _add_min_similarity_score_flag_arg(rank)
     _add_json_flag_arg(rank)
+    _add_zotero_flag_args(rank)
 
     rank_group = rank.add_mutually_exclusive_group()
     _add_paper_titles_flag_arg(rank_group)
@@ -248,7 +296,7 @@ def _add_upload_command(root_command) -> None:
                               help="Path to root directory of pdf files to upload")
 
 
-def create_parser() -> ArgumentParser:
+def parse_arguments() -> Namespace:
     """
     Create the Arg parser
 
@@ -287,4 +335,9 @@ def create_parser() -> ArgumentParser:
     _add_rank_command(commands)  # rank command - use llm to rank papers
     _add_upload_command(commands)  # upload command - upload local pdfs to the database
 
-    return parser
+    args = parser.parse_args()
+    # custom validation
+    _validate_zotero_args(parser, args)
+
+    # args ok
+    return args

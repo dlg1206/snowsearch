@@ -59,7 +59,7 @@ class Neo4jDatabase(ABC):
             with self._driver.session() as session:
                 session.run("RETURN 1")
         except Exception as e:
-            raise ConnectionError(e)
+            raise ConnectionError(e) from e
         logger.debug_msg("Connected Successfully")
 
     def __enter__(self) -> "Neo4jDatabase":

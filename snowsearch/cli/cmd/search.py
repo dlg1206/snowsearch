@@ -6,75 +6,12 @@ Description: Prebuilt commands to search the neo4j database
 @author Derek Garcia
 """
 
-import re
-from typing import List, Tuple
-
-from tabulate import tabulate
+from typing import List
 
 from db.paper_database import PaperDatabase
 from dto.paper_dto import PaperDTO
 from util.logger import logger
 from util.output import print_ranked_papers, write_papers_to_json
-
-RED = "\033[31m"
-RESET = "\033[0m"
-
-
-def _highlight(m: re.Match) -> str:
-    """
-    Highlight match in red
-
-    :param m: Match
-    :return: Highlighted match
-    """
-    return f"{RED}{m.group(0)}{RESET}"
-
-
-def _print_exact_papers(db: PaperDatabase, search_term: str, paper_matches: List[PaperDTO]) -> None:
-    """
-    Print the exact matches and highlight the match
-
-    :param db: Paper database to get additional details from
-    :param paper_matches: List of matching paper DTOs
-    """
-
-    headers = ['#', 'Title', 'DOI', 'URL', 'OpenAlex', 'Citations']
-    table = []
-    for i, paper in enumerate(paper_matches, start=1):
-        table.append([i,
-                      re.sub(rf'{search_term}', _highlight, paper.id, flags=re.IGNORECASE),
-                      paper.doi,
-                      paper.pdf_url,
-                      paper.openalex_url,
-                      len(db.get_citations(paper.id))
-                      ])
-    # output table
-    print(tabulate(table, headers=headers, tablefmt='fancy_grid'))
-
-
-def _print_similar_papers(db: PaperDatabase, paper_matches: List[Tuple[PaperDTO, float, float]]) -> None:
-    """
-    Print matching papers to stdout
-
-    :param db: Paper database to get additional details from
-    :param paper_matches: List of tuples of matching papers and similarity scores to titles and abstracts
-    """
-    headers = ['#', 'Title', 'Title Match', 'Abstract Match', 'DOI', 'URL', 'OpenAlex', 'Citations']
-    table = []
-    for i, data in enumerate(paper_matches, start=1):
-        paper, title_score, abstract_score = data
-        table.append([i,
-                      paper,
-                      f"{100 * title_score:.01f}%",
-                      f"{100 * abstract_score:.01f}%" if abstract_score else None,
-                      paper.doi,
-                      paper.pdf_url,
-                      paper.openalex_url,
-                      len(db.get_citations(paper.id))
-                      ])
-
-    # output table
-    print(tabulate(table, headers=headers, tablefmt='fancy_grid'))
 
 
 def run_search(db: PaperDatabase, nl_query: str,
@@ -84,7 +21,7 @@ def run_search(db: PaperDatabase, nl_query: str,
                only_processed: bool = False,
                min_similarity_score: float = None,
                order_by_abstract: bool = False,
-               json_output: str = None) -> None:
+               json_output: str = None) -> List[PaperDTO]:
     """
     Run a search in the neo4j database
 
@@ -97,6 +34,7 @@ def run_search(db: PaperDatabase, nl_query: str,
     :param min_similarity_score: Minimum similarity score for filter cutoff (Default: None)
     :param order_by_abstract: Return search order by abstract match then title match (Default: False)
     :param json_output: Path to save results to instead of printing to stdout (Default: None)
+    :return: List of resulting papers
     """
     logger.info("Searching database")
 
@@ -112,12 +50,11 @@ def run_search(db: PaperDatabase, nl_query: str,
                                                  paper_limit=paper_limit)
         if not papers:
             logger.warn(f"Found no paper titles that contain the term '{nl_query}'")
-        # highlight matches
-        for p in papers:
-            p.id = re.sub(rf'{nl_query}', _highlight, p.id, flags=re.IGNORECASE)
-        # print
-        print_ranked_papers(db, papers, include_abstract=True)
+        else:
+            logger.info(f"Found {len(papers)} paper titles that contain the term '{nl_query}'")
+
     else:
+        # todo add heartbeat
         papers = db.search_papers_by_nl_query(nl_query,
                                               # if abstract then processed by grobid
                                               require_abstract=only_processed,
@@ -133,4 +70,6 @@ def run_search(db: PaperDatabase, nl_query: str,
         logger.info(f"Results saved to '{json_output}'")
     else:
         # pretty print results
-        print_ranked_papers(db, papers, include_abstract=True, nl_query=nl_query)
+        print_ranked_papers(db, papers, include_abstract=True, nl_query=nl_query, exact_match=nl_query)
+
+    return papers

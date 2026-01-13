@@ -423,7 +423,7 @@ class PaperDatabase(Neo4jDatabase):
         node = Node.create(NodeType.PAPER, {'id': title})
         nl_query_embedding = self._embedding_model.encode(nl_query, show_progress_bar=False).tolist()
 
-        query = f"""
+        query = """
         CALL db.index.vector.queryNodes(
           'paper_title_index',
           $topK,
