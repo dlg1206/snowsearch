@@ -112,7 +112,8 @@ async def _execute(db: PaperDatabase, config: Config, args: Namespace) -> None:
                            top_n_papers,
                            min_score,
                            json_output=args.json,
-                           paper_titles_to_rank=papers)
+                           paper_titles_to_rank=papers,
+                           zotero_client=cf.create_zotero_client(args))
 
         case 'upload':
             # set file paths
