@@ -95,6 +95,8 @@ class ZoteroClient:
                 self._collection_key = collection_key
             except ResourceNotFoundError as e:
                 raise ValueError(f"Collection '{collection_key}' does not exist") from e
+        else:
+            self._collection_key = None
 
     def _validate_api_key(self, library_type: LibraryType, library_id: str) -> None:
         """
