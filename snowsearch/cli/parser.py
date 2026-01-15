@@ -123,7 +123,6 @@ def _add_zotero_flag_args(command) -> None:
     lib_group.add_argument('-zg', '--zotero-group-library',
                            metavar="<group-id>",
                            type=str,
-                           nargs=1,
                            help="Upload to a group Zotero library. "
                                 "The library must be private and user must have write access")
 
