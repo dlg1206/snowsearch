@@ -26,7 +26,9 @@ class PaperDTO:
     doi: str = None
     abstract_text: str = None
     is_open_access: bool = None
+    landing_page_url: str = None
     pdf_url: str = None
+    raw_type: str = None
     openalex_status: int = None
     download_status: int = None
     download_error_msg: str = None

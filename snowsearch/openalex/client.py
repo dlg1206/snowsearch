@@ -25,7 +25,7 @@ from db.config import DOI_PREFIX
 from db.paper_database import PaperDatabase
 from dto.paper_dto import PaperDTO
 from openalex.config import POLITE_RATE_LIMIT_SLEEP, DEFAULT_RATE_LIMIT_SLEEP, MAX_PER_PAGE, OPENALEX_BASE, \
-    QUERY_JSON_RE, MAX_RETRIES, NL_TO_QUERY_CONTEXT_FILE, MAX_DOI_PER_PAGE
+    QUERY_JSON_RE, MAX_RETRIES, NL_TO_QUERY_CONTEXT_FILE, MAX_DOI_PER_PAGE, OPENALEX_API_KEY_ENV
 from openalex.exception import MissingOpenAlexEntryError, ExceedMaxQueryGenerationAttemptsError
 
 
@@ -64,9 +64,13 @@ class OpenAlexClient:
             loggy.warn("No email provided for OpenAlex - Using slower API")
         self._rate_limit = POLITE_RATE_LIMIT_SLEEP if email else DEFAULT_RATE_LIMIT_SLEEP
         self._api_key_available = False  # default false
+
         # check for OpenAlex API key
-        if os.getenv('OPENALEX_API_KEY'):
+        # https://help.openalex.org/hc/en-us/articles/24397762024087-Pricing
+        # todo - this has not been tested
+        if os.getenv(OPENALEX_API_KEY_ENV):
             self._api_key_available = True
+            self._rate_limit = 0    # key has no rate limit
             loggy.info("Found OpenAlex API key")
         # load content for one-shot
         with open(NL_TO_QUERY_CONTEXT_FILE, 'r', encoding='utf-8') as f:
@@ -78,12 +82,12 @@ class OpenAlexClient:
 
         :param params_obj: Params to update
         """
-        # add email if provided
-        if self._email:
-            params_obj['mailto'] = self._email
         # add api key if available
         if self._api_key_available:
-            params_obj['api_key'] = os.getenv('OPENALEX_API_KEY')
+            params_obj['api_key'] = os.getenv(OPENALEX_API_KEY_ENV)
+        # else add email if provided
+        elif self._email:
+            params_obj['mailto'] = self._email
 
     async def _fetch(self, session: ClientSession,
                      openalex_endpoint: str,
@@ -105,10 +109,12 @@ class OpenAlexClient:
         self._add_auth(params)
         params['per_page'] = per_page
         # block to respect rate limit
-        await asyncio.sleep(POLITE_RATE_LIMIT_SLEEP)
+        if self._rate_limit:
+            await asyncio.sleep(self._rate_limit)
         # make the request, remove key for logging
-        url = URL(f"{OPENALEX_BASE}/{openalex_endpoint.removeprefix('/')}").with_query(params).without_query_params(
-            'OPENALEX_API_KEY')
+        url = (URL(f"{OPENALEX_BASE}/{openalex_endpoint.removeprefix('/')}")
+               .with_query(params).without_query_params('api_key'))
+
         loggy.debug_info(f"Querying '{url}'")
         async with session.get(url, params=params) as response:
             response.raise_for_status()
@@ -128,17 +134,7 @@ class OpenAlexClient:
         params = {'filter': f"title_and_abstract.search:{oa_query}", 'cursor': cursor}
         result = await self._fetch(session, "works", params)
         # parse findings
-        return result['meta']['next_cursor'], [
-            PaperDTO(p.get('title') if p.get(
-                'title') else f"MISSING_TITLE_{hashlib.md5(p['id'].encode("utf-8")).hexdigest()[:5]}",
-                     publication_year=p['publication_year'],
-                     publication_date=p['publication_date'],
-                     openalex_url=p['id'],
-                     doi=p['doi'],
-                     is_open_access=bool(p['open_access']['is_oa']),
-                     pdf_url=p['primary_location']['pdf_url'])
-            for p in result.get('results', [])
-        ]
+        return result['meta']['next_cursor'], [_openalex_work_to_paper(w) for w in result.get('results', [])]
 
     async def _fetch_paper_count(self, session: ClientSession, oa_query: str) -> int:
         """
@@ -167,21 +163,16 @@ class OpenAlexClient:
         # process results
         missing_doi_ids = set(doi_batch)
         papers = []
-        for p in results.get('results', []):
-            paper = PaperDTO(p['title'],
-                             openalex_url=p['id'],
-                             doi=p['doi'],
-                             is_open_access=bool(p['open_access']['is_oa']),
-                             pdf_url=p['primary_location']['pdf_url'])
-            papers.append(paper)
-            missing_doi_ids.discard(paper.doi.lower())
-            loggy.debug_info(f"Found '{paper.id}' by doi")
+        for w in results.get('results', []):
+            papers.append(_openalex_work_to_paper(w))
+            missing_doi_ids.discard(w.doi.lower())
+            loggy.debug_info(f"Found '{w.id}' by doi")
 
         return papers, list(missing_doi_ids)
 
     async def _fetch_by_exact_title(self, session: ClientSession, title: str) -> PaperDTO | None:
         """
-        Fetch paper from OpenAlex by exact title match
+        Fetch work from OpenAlex by exact title match
 
         :param session: HTTP session to use
         :param title: Title of paper to search for
@@ -198,15 +189,11 @@ class OpenAlexClient:
         if not result['meta']['count']:
             return None
         # else parse results
-        paper = result['results'][0]
+        work = result['results'][0]
         # not exact match
-        if paper['title'].lower() != title.lower():
+        if work['title'].lower() != title.lower():
             return None
-        return PaperDTO(paper['title'],
-                        openalex_url=paper['id'],
-                        doi=paper['doi'],
-                        is_open_access=bool(paper['open_access']['is_oa']),
-                        pdf_url=paper['primary_location']['pdf_url'])
+        return _openalex_work_to_paper(work)
 
     async def search_and_save_metadata(self, run_id: int, paper_db: PaperDatabase, oa_query: str) -> int:
         """
@@ -393,3 +380,31 @@ async def _fetch_title_wrapper(semaphore: Semaphore, paper: PaperDTO, callback) 
     if r:
         return r
     raise MissingOpenAlexEntryError(paper.doi, paper.id)
+
+def _openalex_work_to_paper(work_json: Dict[str, any]) -> PaperDTO:
+    """
+    Convert an OpenAlex work object to an internal PaperDTO
+
+    :param work_json: JSON object representing OpenAlex work
+    :return: PaperDTO
+    """
+    # get title
+    if work_json.get('title'):
+        title = work_json.get('title')
+    else:
+        title = f"MISSING_TITLE_{hashlib.md5(work_json['id'].encode("utf-8")).hexdigest()[:5]}"
+
+    # use 'best_oa_location' if open access
+    is_open_access = bool(work_json['open_access']['is_oa'])
+    pdf_url = work_json['best_oa_location']['pdf_url'] if is_open_access else work_json['primary_location']['pdf_url']
+
+    return PaperDTO(title,
+                    publication_year=work_json.get('publication_year'),
+                    publication_date=work_json.get('publication_date'),
+                    openalex_url=work_json.get('id'),
+                    doi=work_json.get('doi'),
+                    is_open_access=is_open_access,
+                    landing_page_url=work_json['primary_location']['landing_page_url'],
+                    pdf_url=pdf_url,
+                    # https://docs.openalex.org/api-entities/works/work-object/location-object#raw_type
+                    raw_type=work_json['primary_location']['raw_type'])

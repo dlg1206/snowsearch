@@ -17,6 +17,8 @@ MAX_PER_PAGE = 200
 # https://docs.openalex.org/api-guide-for-llms#bulk-lookup-by-dois
 MAX_DOI_PER_PAGE = 50
 
+OPENALEX_API_KEY_ENV="OPENALEX_API_KEY"
+
 NL_TO_QUERY_CONTEXT_FILE = "snowsearch/prompts/nl_to_openalex_query.prompt"
 QUERY_JSON_RE = re.compile(r'\{\n.*"query": "(.*?)"')
 # attempts to generate OpenAlex query
