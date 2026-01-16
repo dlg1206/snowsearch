@@ -87,7 +87,7 @@ grobid:
     coordinates: ''
 
   # Max number of requests allowed to be made to the grobid server at a time
-  # Default: 1
+  # Default: Number of cores available on the host machine
   max_grobid_requests: ''
 
   # Max number of PDFs to allowed to download at the same time

@@ -68,9 +68,9 @@ class GrobidWorker:
         :param title: Optional title of paper (Default: None)
         :return: Grobid DTO with grobid results
         """
-        timer = Timer()
         # block to prevent overwhelming grobid server
         async with self._grobid_semaphore:
+            timer = Timer()
             logger.debug_msg(f"Processing '{pdf_file_path}'")
             _, status, content = await asyncio.to_thread(self._grobid_client.process_pdf,
                                                          service="processFulltextDocument",
