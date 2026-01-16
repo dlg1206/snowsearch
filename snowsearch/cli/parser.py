@@ -130,25 +130,7 @@ def _add_zotero_flag_args(command) -> None:
                          metavar="<collection-id>",
                          type=str,
                          nargs='?',
-                         help="Collection ID to a specific collection")
-
-
-#
-# Custom validation
-#
-
-def _validate_zotero_args(parser: ArgumentParser, args: Namespace) -> None:
-    """
-    Validate the usage of the Zotero args
-
-    :param parser: Parser used to parse cli args
-    :param args: Args to verify
-    :raises ParseError: If all required flags are not present
-    """
-    # Custom validation: Ensure that collection not used with group
-    if args.zotero_group_library and args.zotero_collection:
-        parser.error("The argument --zotero-collection (-zc) cannot be used with --zotero-group-library (-zg)")
-
+                         help="Collection ID of a specific collection")
 
 #
 # Commands
@@ -337,8 +319,6 @@ def parse_arguments() -> Namespace:
     _add_upload_command(commands)  # upload command - upload local pdfs to the database
 
     args = parser.parse_args()
-    # custom validation
-    _validate_zotero_args(parser, args)
 
     # args ok
     return args

@@ -38,13 +38,22 @@ To upload to a personal library, use the `-zu` argument where available with you
 https://www.zotero.org/settings/security > Applications. To upload to a specific collection or folder, use the `-zc`
 argument to provide the collection ID. This can be found in the url when accessing your Zotero library via the web
 client, NOT the desktop client, after selecting the desired collection like so:
-https://www.zotero.org/<zotero-username>/collections/**<collection-id>**/collection.
+
+`https://www.zotero.org/<zotero-username>/collections/**<collection-id>**/collection`
 
 ## Uploading to a Group Library
 
 To upload to a group library, use the `-zg` argument where available with the group library ID, which can be found in
 the url when accessing your Zotero library via the web client, NOT the desktop client, after selecting the desired
-group library like so: https://www.zotero.org/groups/**<group-id>**/<library-name>/library
+group library like so: 
+
+`https://www.zotero.org/groups/**<group-id>**/<library-name>/library`
+
+To upload to a specific 
+collection or folder, use the `-zc` argument to provide the collection ID. This can be found in the url when accessing 
+your Zotero library via the web client, NOT the desktop client, after selecting the desired collection like so:
+
+`https://www.zotero.org/<group-id>/<library-name>/collections/**<collection-id>**/collection.`
 
 ## Limitations
 

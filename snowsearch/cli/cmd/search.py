@@ -71,6 +71,7 @@ def run_search(db: PaperDatabase, nl_query: str,
         loggy.info(f"Results saved to '{json_output}'")
     else:
         # pretty print results
-        print_ranked_papers(db, papers, include_abstract=True, nl_query=nl_query, exact_match=nl_query)
+        params = {'include_abstract': True, f"{'exact_match' if exact_match else 'nl_query'}": nl_query}
+        print_ranked_papers(db, papers, **params)
 
     return papers

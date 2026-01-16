@@ -73,7 +73,7 @@ class ClientFactory:
 
         # group library
         if args.zotero_group_library:
-            return ZoteroClient(args.zotero_group_library, LibraryType.GROUP)
+            return ZoteroClient(args.zotero_group_library, LibraryType.GROUP, args.zotero_collection)
 
         # required args not present
         return None
