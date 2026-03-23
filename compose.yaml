@@ -11,6 +11,7 @@ services:
     container_name: ollama
     networks:
       - snowsearch-net
+      - pipeshub-ai_internal
     volumes:
       - ollama_models:/root/.ollama
 
@@ -24,7 +25,7 @@ services:
     networks:
       - snowsearch-net
     volumes:
-      - abstract_db:/data
+      - abstract_db_oss:/data
       # temp volume for logs
       - type: tmpfs
         target: /logs
@@ -38,10 +39,12 @@ services:
 
 volumes:
   # for caching abstracts
-  abstract_db:
+  abstract_db_oss:
   # for caching ollama models
   ollama_models:
 
 networks:
   snowsearch-net:
     name: snowsearch-net
+  pipeshub-ai_internal:
+    external: true
