@@ -15,8 +15,10 @@ from tempfile import NamedTemporaryFile, TemporaryDirectory
 from typing import List, Dict, Any
 
 import grobid_tei_xml
+import loggy
 from aiohttp import ClientSession
 from grobid_client.grobid_client import GrobidClient
+from loggy import Timer
 
 from db.paper_database import PaperDatabase
 from download.config import MAX_CONCURRENT_DOWNLOADS, MAX_PDF_COUNT
@@ -26,8 +28,6 @@ from dto.grobid_dto import GrobidDTO
 from dto.paper_dto import PaperDTO
 from grobid.config import MAX_GROBID_REQUESTS
 from grobid.exception import GrobidProcessError
-from util.logger import logger
-from util.timer import Timer
 
 # Mute grobid client logs
 logging.getLogger("grobid_client").setLevel(logging.CRITICAL)  # todo doesn't work
@@ -88,7 +88,7 @@ class GrobidWorker:
             raise GrobidProcessError(title, status, content)
         # else parse TEI
         doc = grobid_tei_xml.parse_document_xml(content)
-        logger.debug_msg(f"Processed '{pdf_file_path}' in {timer.format_time()}s | {title}")
+        loggy.debug_info(f"Processed '{pdf_file_path}' in {timer.format_time()}s | {title}")
         timestamp = datetime.now()
         citations = [PaperDTO(c.title, doi=c.doi, time_added=timestamp) for c in doc.citations if c.title]
         # use provided title if provided, else use one parsed by grobid
@@ -120,7 +120,7 @@ class GrobidWorker:
                     async with self._download_semaphore:
                         timer = Timer()
                         await download_pdf(session, title, pdf_url, tmp_pdf.name)
-                        logger.debug_msg(f"Saved '{tmp_pdf.name}' in {timer.format_time()}s | {pdf_url}")
+                        loggy.debug_info(f"Saved '{tmp_pdf.name}' in {timer.format_time()}s | {pdf_url}")
 
                     # process paper
                     return await self.process_paper(tmp_pdf.name, title)
@@ -147,9 +147,9 @@ class GrobidWorker:
             async with ClientSession() as session:
                 # queue tasks
                 tasks = [self._process_paper_task(session, work_dir, p.id, p.pdf_url) for p in papers]
-                logger.debug_msg(f"Processing {len(papers)} papers")
+                loggy.debug_info(f"Processing {len(papers)} papers")
                 # save results as complete
-                for future in logger.get_data_queue(tasks, "Processing papers", "papers", is_async=True):
+                for future in loggy.async_data_queue(tasks, "Processing papers", "papers"):
                     try:
                         result: GrobidDTO = await future
                         result.paper.download_status = 200
@@ -165,31 +165,31 @@ class GrobidWorker:
 
                     # no file to download
                     except NoFileDataError as e:
-                        logger.error_exp(e)
+                        loggy.error(e)
                         paper_db.upsert_paper(PaperDTO(e.paper_title, download_status=204))
                         num_fail_download += 1
 
                     # bad file format
                     except InvalidFileFormatError as e:
-                        logger.error_exp(e)
+                        loggy.error(e)
                         paper_db.upsert_paper(PaperDTO(e.paper_title, download_status=415))
                         num_fail_download += 1
 
                     # failed to download pdf
                     except PaperDownloadError as e:
-                        logger.error_exp(e)
+                        loggy.error(e)
                         paper_db.upsert_paper(
                             PaperDTO(e.paper_title, download_status=e.status_code, download_error_msg=e.error_msg))
                         num_fail_download += 1
                     # failed to parse pdf
                     except GrobidProcessError as e:
-                        logger.error_exp(e)
+                        loggy.error(e)
                         paper_db.upsert_paper(
                             PaperDTO(e.paper_title, grobid_status=e.status_code, grobid_error_msg=e.error_msg))
                         num_fail_process += 1
                     # misc exception
                     except Exception as e:
-                        logger.error_exp(e)
+                        loggy.error(e)
                         num_misc_error += 1
 
         # report results
@@ -204,12 +204,12 @@ class GrobidWorker:
                 """
                 return f"{(a / b) * 100:.01f}%"
 
-            logger.info(f"Processing complete, successfully downloaded and processed "
-                        f"{num_success} papers ({__percent(num_success, len(papers))})")
-            logger.debug_msg(f"Found {len(unique_citations)} citations")
-            logger.debug_msg(
+            loggy.info(f"Processing complete, successfully downloaded and processed "
+                       f"{num_success} papers ({__percent(num_success, len(papers))})")
+            loggy.debug_info(f"Found {len(unique_citations)} citations")
+            loggy.debug_warn(
                 f"Failed to download {num_fail_download} papers ({__percent(num_fail_download, len(papers))})")
-            logger.debug_msg(f"Failed to process {num_fail_process} papers "
+            loggy.debug_warn(f"Failed to process {num_fail_process} papers "
                              f"({__percent(num_fail_process, len(papers))})")
 
         return num_success

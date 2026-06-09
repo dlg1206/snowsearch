@@ -8,9 +8,10 @@ Description: Prebuilt commands to search the neo4j database
 
 from typing import List
 
+import loggy
+
 from db.paper_database import PaperDatabase
 from dto.paper_dto import PaperDTO
-from util.logger import logger
 from util.output import print_ranked_papers, write_papers_to_json
 
 
@@ -36,7 +37,7 @@ def run_search(db: PaperDatabase, nl_query: str,
     :param json_output: Path to save results to instead of printing to stdout (Default: None)
     :return: List of resulting papers
     """
-    logger.info("Searching database")
+    loggy.info("Searching database")
 
     # get all papers if none provided
     if paper_limit is None:
@@ -49,9 +50,9 @@ def run_search(db: PaperDatabase, nl_query: str,
                                                  only_open_access=only_open_access,
                                                  paper_limit=paper_limit)
         if not papers:
-            logger.warn(f"Found no paper titles that contain the term '{nl_query}'")
+            loggy.warn(f"Found no paper titles that contain the term '{nl_query}'")
         else:
-            logger.info(f"Found {len(papers)} paper titles that contain the term '{nl_query}'")
+            loggy.info(f"Found {len(papers)} paper titles that contain the term '{nl_query}'")
 
     else:
         # todo add heartbeat
@@ -63,11 +64,11 @@ def run_search(db: PaperDatabase, nl_query: str,
                                               min_score=min_similarity_score,
                                               order_by_abstract=order_by_abstract)
         if not papers:
-            logger.warn(f"Found no paper titles that match the search within the search filters | '{nl_query}'")
+            loggy.warn(f"Found no paper titles that match the search within the search filters | '{nl_query}'")
 
     if json_output:
         json_output = write_papers_to_json(db, json_output, papers, nl_query=nl_query)
-        logger.info(f"Results saved to '{json_output}'")
+        loggy.info(f"Results saved to '{json_output}'")
     else:
         # pretty print results
         print_ranked_papers(db, papers, include_abstract=True, nl_query=nl_query, exact_match=nl_query)

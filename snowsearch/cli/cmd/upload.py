@@ -8,14 +8,15 @@ Description: Upload local pdf papers to be stored in the database
 
 from typing import List
 
+import loggy
+from loggy import Timer
+
 from db.paper_database import PaperDatabase
 from dto.grobid_dto import GrobidDTO
 from dto.paper_dto import PaperDTO
 from grobid.exception import GrobidProcessError
 from grobid.worker import GrobidWorker
 from openalex.client import OpenAlexClient
-from util.logger import logger
-from util.timer import Timer
 from util.verify import validate_file_is_pdf
 
 
@@ -35,9 +36,9 @@ async def run_upload(db: PaperDatabase,
     valid_paper_files = []
     for p in paper_pdf_paths:
         if not validate_file_is_pdf(p):
-            logger.warn(f"'{p}' is not a valid pdf, skipping")
+            loggy.warn(f"'{p}' is not a valid pdf, skipping")
         else:
-            logger.debug_msg(f"'{p}' is a valid pdf")
+            loggy.debug_info(f"'{p}' is a valid pdf")
             valid_paper_files.append(p)
 
     # error if nothing to process
@@ -47,7 +48,7 @@ async def run_upload(db: PaperDatabase,
     # preempt model load
     db.load_embedding_model()
 
-    logger.info(f"Uploading {len(valid_paper_files)} papers")
+    loggy.info(f"Uploading {len(valid_paper_files)} papers")
 
     timer = Timer()
     papers = []
@@ -56,7 +57,7 @@ async def run_upload(db: PaperDatabase,
 
     tasks = [grobid_worker.process_paper(p) for p in valid_paper_files]
     # save results as completed
-    for future in logger.get_data_queue(tasks, "Processing papers", "papers", is_async=True):
+    for future in loggy.async_data_queue(tasks, "Processing papers", "papers"):
         try:
             result: GrobidDTO = await future
             result.paper.grobid_status = 200
@@ -69,7 +70,7 @@ async def run_upload(db: PaperDatabase,
 
         # failed to parse pdf
         except GrobidProcessError as e:
-            logger.error_exp(e)
+            loggy.error(e)
             db.upsert_paper(PaperDTO(e.paper_title, grobid_status=e.status_code, grobid_error_msg=e.error_msg))
             num_fail_process += 1
 
@@ -82,6 +83,6 @@ async def run_upload(db: PaperDatabase,
     n_metadata_found += await openalex_client.fetch_and_save_paper_metadata(db, list(citations))
 
     # log stats
-    logger.info(f"Upload complete in {timer.format_time()}s")
-    logger.info(f"Processed {num_success} papers")
-    logger.info(f"Fetched details for {n_metadata_found} papers")
+    loggy.info(f"Upload complete in {timer.format_time()}s")
+    loggy.info(f"Processed {num_success} papers")
+    loggy.info(f"Fetched details for {n_metadata_found} papers")

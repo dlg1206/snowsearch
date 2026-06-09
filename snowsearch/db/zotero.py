@@ -12,15 +12,15 @@ from os.path import exists
 from tempfile import TemporaryDirectory, NamedTemporaryFile
 from typing import List, Dict, Any, Set, Tuple
 
+import loggy
 from aiohttp import ClientSession
+from loggy import Timer
 from pyzotero.zotero import Zotero
 from pyzotero.zotero_errors import UserNotAuthorisedError, ResourceNotFoundError
 
 from download.exception import NoFileDataError, InvalidFileFormatError, PaperDownloadError
 from download.pdf import download_pdf
 from dto.paper_dto import PaperDTO
-from util.logger import logger
-from util.timer import Timer
 
 ZOTERO_API_KEY_ENV = "ZOTERO_API_KEY"
 
@@ -120,7 +120,7 @@ class ZoteroClient:
 
         try:
             permissions = self._zot.key_info()
-            logger.debug_msg("Zotero API key is valid")
+            loggy.debug_info("Zotero API key is valid")
             # validate personal library perms
             if library_type == LibraryType.USER:
                 user_perms = permissions['access'].get('user', {})
@@ -130,10 +130,10 @@ class ZoteroClient:
 
                 # warn if excessive permissions
                 if 'notes' in user_perms:
-                    logger.warn(
+                    loggy.warn(
                         "Zotero API key has notes access but not needed for SnowSearch, considered removing access")
                 if 'group' in permissions['access']:
-                    logger.warn(
+                    loggy.warn(
                         "Zotero API key has access to group libraries but configured to "
                         "use for personal libraries, considered removing access")
 
@@ -150,19 +150,19 @@ class ZoteroClient:
 
                 # warn if excessive permissions
                 if key == 'all':
-                    logger.warn(
+                    loggy.warn(
                         f"Using default group permissions, consider defining permissions "
                         f"for only group library '{library_id}'")
                 if key == library_id and len(groups_perms) > 1:
-                    logger.warn(
+                    loggy.warn(
                         f"Zotero API key has access to other group libraries but configured to "
                         f"use group library '{library_id}', considered removing access")
                 if 'user' in permissions['access']:
-                    logger.warn(
+                    loggy.warn(
                         "Zotero API key has access to personal library but configured to "
                         "use group libraries, considered removing access")
 
-            logger.debug_msg("Zotero API key has sufficient permissions")
+            loggy.debug_info("Zotero API key has sufficient permissions")
         except UserNotAuthorisedError as e:
             # bad API key
             raise InvalidAPIKeyError() from e
@@ -171,12 +171,11 @@ class ZoteroClient:
         """
         Fetch list of items in a zotero library
 
-
         :return: Set of DOI and titles of items
         """
         if self._collection_key:
             collection = self._zot.collection(self._collection_key)
-            logger.info(f"Fetching details from collection '{collection['data']['name']}'")
+            loggy.info(f"Fetching details from collection '{collection['data']['name']}'")
 
         # fetch items
         zot_items = self._zot.everything(self._zot.collection_items(self._collection_key)
@@ -215,7 +214,7 @@ class ZoteroClient:
                 template['filename'] = os.path.basename(tmp_pdf.name)
                 return template
             except (NoFileDataError, InvalidFileFormatError, PaperDownloadError) as e:
-                logger.error_exp(e)
+                loggy.error(e)
                 # delete file to support windows
                 if tmp_pdf and exists(tmp_pdf.name):
                     os.remove(tmp_pdf.name)
@@ -253,7 +252,7 @@ class ZoteroClient:
 
                     # Skip papers that have already been added
                     if key in existing:
-                        logger.debug_msg(f"Skipping duplicate {label} '{key}'")
+                        loggy.debug_info(f"Skipping duplicate {label} '{key}'")
                         continue
 
                     # Create a task to add the new paper to Zotero
@@ -261,10 +260,10 @@ class ZoteroClient:
 
                 # exit early if nothing new to add
                 if not tasks:
-                    logger.warn("No new papers to upload, exiting. . .")
+                    loggy.warn("No new papers to upload, exiting. . .")
                     return
                 # else wait for items to finish
-                for future in logger.get_data_queue(tasks, "Creating Zotero items", "papers", is_async=True):
+                for future in loggy.async_data_queue(tasks, "Creating Zotero items", "papers"):
                     template = await future
                     if self._collection_key:
                         template['collections'] = [self._collection_key]
@@ -272,18 +271,18 @@ class ZoteroClient:
 
             # upload items to Zotero
             if new_zot_items:
-                logger.info("Uploading items. . .")
+                loggy.info("Uploading items. . .")
                 response = self._zot.create_items(new_zot_items)
                 if response['failed']:
-                    logger.warn("Some items failed to be created")
+                    loggy.warn("Some items failed to be created")
 
             # exit early if nothing to upload
             if len(os.listdir(work_dir)) == 0:
-                logger.info("No PDFs to upload")
+                loggy.info("No PDFs to upload")
                 return
 
             # upload PDF attachments to Zotero
-            logger.info("Uploading pdfs. . .")
+            loggy.info("Uploading pdfs. . .")
             attachments = []
             for r in response['successful'].values():
                 # ignore any DOI items
@@ -296,5 +295,5 @@ class ZoteroClient:
                 })
             # upload pdfs
             self._zot.upload_attachments(attachments, basedir=work_dir)
-            logger.info("PDFs uploaded")
-            logger.info(f"Completed upload process in {timer.format_time()}s")
+            loggy.info("PDFs uploaded")
+            loggy.info(f"Completed upload process in {timer.format_time()}s")

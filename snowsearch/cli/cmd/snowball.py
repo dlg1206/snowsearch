@@ -8,13 +8,14 @@ Description: Perform rounds of snowballing from the cli
 
 from typing import List, Tuple
 
+import loggy
+from loggy import Timer
+
 from config.parser import SnowballConfigDTO
 from db.paper_database import PaperDatabase
 from dto.paper_dto import PaperDTO
 from grobid.worker import GrobidWorker
 from openalex.client import OpenAlexClient
-from util.logger import logger
-from util.timer import Timer
 from util.verify import validate_all_papers_found
 
 
@@ -67,10 +68,10 @@ async def snowball(db: PaperDatabase, openalex_client: OpenAlexClient, grobid_wo
 
         # exit early if no papers to snowball with
         if not round_papers:
-            logger.warn("Did not find more valid papers to continue snowballing; exiting early")
+            loggy.warn("Did not find more valid papers to continue snowballing; exiting early")
             break
 
-        logger.info(f"Starting Snowball Round {r + 1} / {n_rounds}")
+        loggy.info(f"Starting Snowball Round {r + 1} / {n_rounds}")
         timer = Timer()
 
         # process until reach round quota if not lazy
@@ -88,7 +89,7 @@ async def snowball(db: PaperDatabase, openalex_client: OpenAlexClient, grobid_wo
             # break if not retrying
             if ignore_quota:
                 if remaining_quota:
-                    logger.info("Lazy snowball -- ignoring round quota")
+                    loggy.info("Lazy snowball -- ignoring round quota")
                 break
             # quota met or (first round and seed provided)
             if remaining_quota <= 0 or (not r and seed_provided):
@@ -96,12 +97,12 @@ async def snowball(db: PaperDatabase, openalex_client: OpenAlexClient, grobid_wo
                 break
 
             # else get a new batch to attempt to meet the quota
-            logger.warn(f"Did not meet round quota, processing {remaining_quota} additional papers")
+            loggy.warn(f"Did not meet round quota, processing {remaining_quota} additional papers")
             round_papers = __get_papers_for_round(remaining_quota)
 
             # exit early if no papers to snowball with
             if not round_papers:
-                logger.warn("Did not find more valid papers to meet quota; exiting early")
+                loggy.warn("Did not find more valid papers to meet quota; exiting early")
                 break
 
         # fetch metadata for new citations
@@ -113,7 +114,7 @@ async def snowball(db: PaperDatabase, openalex_client: OpenAlexClient, grobid_wo
         new_citations += await openalex_client.fetch_and_save_paper_metadata(db, list(citations))
 
         # Repeat
-        logger.info(f"Snowball Round {r + 1} completed in {timer.format_time()}s")
+        loggy.info(f"Snowball Round {r + 1} completed in {timer.format_time()}s")
 
     # return stats
     return processed_papers, new_citations
@@ -142,26 +143,26 @@ async def run_snowball(db: PaperDatabase,
 
     # fetch seed papers
     if seed_paper_titles:
-        logger.debug_msg("Using provided papers for seed")
+        loggy.debug_info("Using provided papers for seed")
         seed_papers = db.get_papers(seed_paper_titles)
         for missing_title in validate_all_papers_found(seed_paper_titles, seed_papers):
-            logger.warn(f"Could not find seed paper '{missing_title}' in the database")
+            loggy.warn(f"Could not find seed paper '{missing_title}' in the database")
 
     elif nl_query:
-        logger.debug_msg("Using best query match for seed")
+        loggy.debug_info("Using best query match for seed")
         seed_papers = db.search_papers_by_nl_query(nl_query,
                                                    unprocessed=True,
                                                    only_open_access=True,
                                                    paper_limit=round_quota,
                                                    min_score=snowball_config.min_similarity_score)
     else:
-        logger.debug_msg("Using default unprocessed papers")
+        loggy.debug_info("Using default unprocessed papers")
         seed_papers = db.get_unprocessed_papers(round_quota)
 
     # perform N rounds of snowballing
     timer = Timer()
-    logger.info(f"Starting {snowball_config.rounds} rounds of snowballing")
-    logger.info(f"Starting snowball with {len(seed_papers)} seed papers")
+    loggy.debug_info(f"Starting {snowball_config.rounds} rounds of snowballing")
+    loggy.debug_info(f"Starting snowball with {len(seed_papers)} seed papers")
     processed_papers, new_citations = await snowball(db, openalex_client, grobid_worker,
                                                      snowball_config.rounds, seed_papers,
                                                      nl_query=nl_query,
@@ -171,6 +172,6 @@ async def run_snowball(db: PaperDatabase,
                                                      seed_provided=bool(seed_paper_titles))
 
     # log stats
-    logger.info(f"Snowballing complete in {timer.format_time()}s")
-    logger.info(f"Processed {processed_papers} new papers")
-    logger.info(f"Fetched details for {new_citations} new citations")
+    loggy.info(f"Snowballing complete in {timer.format_time()}s")
+    loggy.info(f"Processed {processed_papers} new papers")
+    loggy.info(f"Fetched details for {new_citations} new citations")

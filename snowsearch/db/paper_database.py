@@ -12,14 +12,14 @@ from dataclasses import asdict
 from datetime import datetime
 from typing import Dict, List, Tuple, Any
 
+import loggy
+from loggy import Timer
 from neo4j import GraphDatabase
 
 from db.config import DEFAULT_EMBEDDING_MODEL, DEFAULT_DIMENSIONS, SENTENCE_TRANSFORMER_CACHE, DOI_PREFIX
 from db.database import Neo4jDatabase
 from db.entity import Node, NodeType, RelationshipType
 from dto.paper_dto import PaperDTO
-from util.logger import logger
-from util.timer import Timer
 
 # supress INFO logs from sentence_transformers
 logging.getLogger("sentence_transformers").setLevel(logging.WARNING)
@@ -89,13 +89,13 @@ class PaperDatabase(Neo4jDatabase):
         # download embedding model if needed
         timer = Timer()
         if _is_model_local(self._embedding_model_name):
-            logger.info(f"Loading embedding model '{self._embedding_model_name}'")
+            loggy.info(f"Loading embedding model '{self._embedding_model_name}'")
         else:
-            logger.warn(f"Embedding model '{self._embedding_model_name}' not downloaded locally, downloading now")
+            loggy.warn(f"Embedding model '{self._embedding_model_name}' not downloaded locally, downloading now")
 
         from sentence_transformers import SentenceTransformer  # lazy load
         self._embedding_model = SentenceTransformer(self._embedding_model_name, device='cpu')
-        logger.info(f"Loaded '{self._embedding_model_name}' in {timer.format_time()}s")
+        loggy.info(f"Loaded '{self._embedding_model_name}' in {timer.format_time()}s")
 
     def start_run(self) -> int:
         """

@@ -10,12 +10,12 @@ import os
 from dataclasses import dataclass
 from typing import Dict, Any, List
 
+import loggy
 import yaml
 
 from config.default import AgentDefaults, AbstractRankingDefaults, GrobidDefaults, SnowballDefaults
 from download.config import MAX_PDF_COUNT
 from grobid.config import MAX_CONCURRENT_DOWNLOADS
-from util.logger import logger
 
 DEFAULT_CONFIG_PATH = "config.yaml"
 
@@ -160,7 +160,7 @@ class Config:
         """
         # use env + defaults if no config to use
         if not config_file:
-            logger.debug_msg("Using default configuration")
+            loggy.debug_info("Using default configuration")
             agent_config = AgentConfigDTO()
             self._snowball = SnowballConfigDTO()
             self._query_generation = agent_config
@@ -170,7 +170,7 @@ class Config:
             return
 
         # load config file if provided
-        logger.info(f"Loading config details from '{config_file}'")
+        loggy.info(f"Loading config details from '{config_file}'")
         with open(config_file, 'r', encoding='utf-8') as file:
             config = yaml.safe_load(file)
 
