@@ -89,8 +89,8 @@ docker compose -f compose.yaml -f override/gpu.yaml up
 ```
 
 > [!NOTE]  
-> Overrides are not exclusive. The only requirement is that the first `-f` argument **MUST** be `compose.yaml`, then 
-> overrides can be used in any order. For example, to run with database access and GPU support, run 
+> Overrides are not exclusive. The only requirement is that the first `-f` argument **MUST** be `compose.yaml`, then
+> overrides can be used in any order. For example, to run with database access and GPU support, run
 > `docker run --rm -it -f compose.yaml -f override/database.yaml -f override/gpu.yaml up`
 
 ## Local Deployment and Development
@@ -136,19 +136,22 @@ docker compose -f compose.yaml -f override/dev.yaml up
 ```
 
 This will open up all service ports so scripts run on your machine will be able to access them through `localhost` and
-their respective ports. For working with the database, see the [database doc](docs/database.md) for a rundown to how objects have been 
+their respective ports. For working with the database, see the [database doc](docs/database.md) for a rundown to how
+objects have been
 structured.
 
 ## Usage Tips and Tricks
 
 ### Model Selection
+
 During development, smaller models struggled to perform well. There is retry logic in place, but if prompt generation or
- abstract ranking fail repeatedly, consider using a model with a larger context window.
+abstract ranking fail repeatedly, consider using a model with a larger context window.
 
 ### Natural Language Query
-Try to be as descriptive and specific as possible when creating using a semantic or natural language search query. 
-Single quotes ('') can be used for exact matches for key terms. If no results appear, then generalize your search. A 
-good strategy is to keep the search domain specific but broad, then use `snowball` and `search` commands to filter any 
+
+Try to be as descriptive and specific as possible when creating using a semantic or natural language search query.
+Single quotes ('') can be used for exact matches for key terms. If no results appear, then generalize your search. A
+good strategy is to keep the search domain specific but broad, then use `snowball` and `search` commands to filter any
 non-related papers.
 
 ## Acknowledgments

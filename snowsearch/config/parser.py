@@ -12,7 +12,7 @@ from typing import Dict, Any, List
 
 import yaml
 
-from config.default import OllamaDefaults, AgentDefaults, AbstractRankingDefaults, GrobidDefaults, SnowballDefaults
+from config.default import AgentDefaults, AbstractRankingDefaults, GrobidDefaults, SnowballDefaults
 from download.config import MAX_PDF_COUNT
 from grobid.config import MAX_CONCURRENT_DOWNLOADS
 from util.logger import logger
@@ -27,7 +27,6 @@ class AgentConfigDTO:
     """
     model_name: str = None
     model_tag: str = None
-    context_window: int = None
     ollama_host: str = None
     ollama_port: int = None
 
@@ -40,19 +39,13 @@ class AgentConfigDTO:
         # assign env or default if not set with config
         self.model_name = self.model_name or os.getenv('SS_AGENT_MODEL', AgentDefaults.MODEL)
         self.model_tag = self.model_tag or os.getenv('SS_AGENT_TAG', AgentDefaults.TAG)
-        self.context_window = int(
-            self.context_window or os.getenv('SS_AGENT_CONTEXT_WINDOW', str(AgentDefaults.CONTEXT_WINDOW)))
-        self.ollama_host = self.ollama_host or os.getenv('SS_OLLAMA_HOST', str(OllamaDefaults.OLLAMA_HOST))
-        self.ollama_port = int(self.ollama_port or os.getenv('SS_OLLAMA_PORT', str(OllamaDefaults.OLLAMA_PORT)))
+        self.ollama_host = os.getenv('SS_OLLAMA_HOST', self.ollama_host)
+        self.ollama_port = int(os.getenv('SS_OLLAMA_PORT', self.ollama_port))
 
         # validate config
         # check port
         if self.ollama_port <= 0:
             raise ValueError(f"{self.ollama_port} is an invalid port")
-
-        # ensure context is positive
-        if self.context_window <= 0:
-            raise ValueError("Context window must be greater than 0")
 
 
 @dataclass
@@ -81,7 +74,7 @@ class OpenAlexConfigDTO:
     """
     Config for OpenAlex
     """
-    email: str = None
+    email: str | None = None
 
     def __post_init__(self):
         """
@@ -128,7 +121,7 @@ class GrobidConfigDTO:
 @dataclass
 class SnowballConfigDTO:
     """
-    Config for snowbal
+    Config for snowball
     """
     rounds: int = SnowballDefaults.ROUNDS
     min_similarity_score: float = SnowballDefaults.MIN_SIMILARITY_SCORE

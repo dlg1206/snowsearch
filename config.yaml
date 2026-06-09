@@ -113,19 +113,19 @@ ollama:
 
 # Config for lLM
 agent:
-    # Model to use for generating queries and ranking abstracts
-    # If using ollama (default), search for desired models here: https://ollama.com/search
-    # If using OpenAI, search for desired models here: https://platform.openai.com/docs/models
-    # Default: llama3
-    # (env: SS_AGENT_MODEL)
-    model_name: ''
+  # Model to use for generating queries and ranking abstracts
+  # If using ollama (default), search for desired models here: https://ollama.com/search
+  # If using OpenAI, search for desired models here: https://platform.openai.com/docs/models
+  # Default: llama3
+  # (env: SS_AGENT_MODEL)
+  model_name: ''
 
-    # If using ollama, specify a tag model to use
-    # Default: latest
-    # (env: SS_AGENT_TAG)
-    model_tag: ''
+  # If using ollama, specify a tag model to use
+  # Default: latest
+  # (env: SS_AGENT_TAG)
+  model_tag: ''
 
-    # Context window of selected model
-    # Default: 5000 - conservative estimate
-    # (env: SS_AGENT_CONTEXT_WINDOW)
-    context_window: ''
+  # Context window of selected model
+  # Default: 5000 - conservative estimate
+  # (env: SS_AGENT_CONTEXT_WINDOW)
+  context_window: ''

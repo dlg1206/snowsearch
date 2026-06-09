@@ -8,7 +8,6 @@ Description: Hardcoded defaults to fallback on
 
 from dataclasses import dataclass
 
-from ai import ollama
 from download.config import MAX_PDF_COUNT
 from grobid.config import MAX_GROBID_REQUESTS, MAX_CONCURRENT_DOWNLOADS
 from rank.config import AVG_TOKEN_PER_WORD
@@ -65,12 +64,3 @@ class GrobidDefaults:
     MAX_GROBID_REQUESTS = MAX_GROBID_REQUESTS
     MAX_CONCURRENT_DOWNLOADS = MAX_CONCURRENT_DOWNLOADS
     MAX_LOCAL_PDFS = MAX_PDF_COUNT
-
-
-@dataclass(frozen=True)
-class OllamaDefaults:
-    """
-    Defaults for ollama
-    """
-    OLLAMA_HOST = ollama.DEFAULT_HOST
-    OLLAMA_PORT = ollama.DEFAULT_PORT
