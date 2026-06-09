@@ -15,9 +15,10 @@ from asyncio import Semaphore
 from json import JSONDecodeError
 from typing import List, Dict, Tuple, Any
 
+import loggy
 from aiohttp import ClientSession
 from llumpy import AsyncModelClient, ConversationBuilder, JSONRetryHandler, ExceededRetriesError
-from tqdm.std import tqdm as TQDM
+from loggy import Timer
 from yarl import URL
 
 from db.config import DOI_PREFIX
@@ -26,8 +27,6 @@ from dto.paper_dto import PaperDTO
 from openalex.config import POLITE_RATE_LIMIT_SLEEP, DEFAULT_RATE_LIMIT_SLEEP, MAX_PER_PAGE, OPENALEX_BASE, \
     QUERY_JSON_RE, MAX_RETRIES, NL_TO_QUERY_CONTEXT_FILE, MAX_DOI_PER_PAGE
 from openalex.exception import MissingOpenAlexEntryError, ExceedMaxQueryGenerationAttemptsError
-from util.logger import logger
-from util.timer import Timer
 
 
 class _QueryJSONRetryHandler(JSONRetryHandler):
@@ -62,13 +61,13 @@ class OpenAlexClient:
         """
         self._email = email
         if not email:
-            logger.warn("No email provided for OpenAlex - Using slower API")
+            loggy.warn("No email provided for OpenAlex - Using slower API")
         self._rate_limit = POLITE_RATE_LIMIT_SLEEP if email else DEFAULT_RATE_LIMIT_SLEEP
         self._api_key_available = False  # default false
         # check for OpenAlex API key
         if os.getenv('OPENALEX_API_KEY'):
             self._api_key_available = True
-            logger.info("Found OpenAlex API key")
+            loggy.info("Found OpenAlex API key")
         # load content for one-shot
         with open(NL_TO_QUERY_CONTEXT_FILE, 'r', encoding='utf-8') as f:
             self._nl_to_query_context = f.read()
@@ -110,7 +109,7 @@ class OpenAlexClient:
         # make the request, remove key for logging
         url = URL(f"{OPENALEX_BASE}/{openalex_endpoint.removeprefix('/')}").with_query(params).without_query_params(
             'OPENALEX_API_KEY')
-        logger.debug_msg(f"Querying '{url}'")
+        loggy.debug_info(f"Querying '{url}'")
         async with session.get(url, params=params) as response:
             response.raise_for_status()
             return await response.json()
@@ -176,7 +175,7 @@ class OpenAlexClient:
                              pdf_url=p['primary_location']['pdf_url'])
             papers.append(paper)
             missing_doi_ids.discard(paper.doi.lower())
-            logger.debug_msg(f"Found '{paper.id}' by doi")
+            loggy.debug_info(f"Found '{paper.id}' by doi")
 
         return papers, list(missing_doi_ids)
 
@@ -221,11 +220,11 @@ class OpenAlexClient:
         oa_query = oa_query.replace("'", '"')
         async with ClientSession() as session:
             hits = await self._fetch_paper_count(session, oa_query)
-            logger.debug_msg(f"Found {hits} papers in OpenAlex")
+            loggy.debug_info(f"Found {hits} papers in OpenAlex")
             # exit early if no hits
             if not hits:
                 return 0
-            progress = logger.get_data_queue(hits, "Querying OpenAlex Database", "paper")
+            progress = loggy.manual_data_queue(hits, "Querying OpenAlex Database", "paper")
             # fetch all papers
             next_cursor = "*"
             rank_offset = 0
@@ -245,16 +244,11 @@ class OpenAlexClient:
                         break
                 except Exception as e:
                     # todo - handle exceed requests per day
-                    logger.error_exp(e)
+                    loggy.error(e)
                 finally:
                     # update progress
-                    if isinstance(progress, TQDM):
+                    if progress:
                         progress.update(update_chunk)
-
-        # close progress bar if using
-        if isinstance(progress, TQDM):
-            progress.close()
-
         return hits
 
     async def fetch_and_save_paper_metadata(self,
@@ -273,7 +267,7 @@ class OpenAlexClient:
         num_doi = 0
         num_title = 0
         num_missing = 0
-        logger.debug_msg(f"Searching for details for {len(papers)} papers")
+        loggy.debug_info(f"Searching for details for {len(papers)} papers")
         # split into doi, title and just doi search
         doi_and_title = []
         doi_reverse_lookup = {}
@@ -291,8 +285,7 @@ class OpenAlexClient:
             if doi_chunks:
                 doi_tasks = [_fetch_doi_batch_wrapper(semaphore, self._batch_fetch_by_doi(session, chunk))
                              for chunk in doi_chunks]
-                for future in logger.get_data_queue(doi_tasks, "Fetching paper details by doi", "batch",
-                                                    is_async=True):
+                for future in loggy.async_data_queue(doi_tasks, "Fetching paper details by doi", "batch"):
                     found_papers, missing_doi_ids = await future
                     num_doi += len(found_papers)
                     # save titles for second pass
@@ -305,20 +298,19 @@ class OpenAlexClient:
             if not skip_title_search and titles:
                 title_tasks = [_fetch_title_wrapper(semaphore, c, self._fetch_by_exact_title(session, c.id))
                                for c in titles]
-                for future in logger.get_data_queue(title_tasks, "Fetching paper details by title", "paper",
-                                                    is_async=True):
+                for future in loggy.get_data_queue(title_tasks, "Fetching paper details by title", "paper"):
                     try:
                         paper = await future
                         num_title += 1
                         paper_db.upsert_paper(paper)
-                        logger.debug_msg(f"Found '{paper.id}' by title")
+                        loggy.debug_info(f"Found '{paper.id}' by title")
                     except MissingOpenAlexEntryError as e:
                         num_missing += 1
-                        logger.error_exp(e)
+                        loggy.error(e)
                         paper_db.upsert_paper(PaperDTO(e.title, openalex_status=404))
                     except Exception as e:
                         num_missing += 1
-                        logger.error_exp(e)
+                        loggy.error(e)
 
         # report results
         if len(papers):
@@ -333,11 +325,11 @@ class OpenAlexClient:
                 return f"{(a / b) * 100:.01f}%"
 
             num_success = num_doi + num_title
-            logger.info(
+            loggy.info(
                 f"Search complete, successfully updated {num_success} papers ({__percent(num_success, len(papers))})")
-            logger.debug_msg(f"Found {num_doi} papers by DOI ({__percent(num_doi, len(papers))})")
-            logger.debug_msg(f"Found {num_title} papers by title ({__percent(num_title, len(papers))})")
-            logger.debug_msg(f"Failed to find {num_missing} papers ({__percent(num_missing, len(papers))})")
+            loggy.debug_info(f"Found {num_doi} papers by DOI ({__percent(num_doi, len(papers))})")
+            loggy.debug_info(f"Found {num_title} papers by title ({__percent(num_title, len(papers))})")
+            loggy.debug_warn(f"Failed to find {num_missing} papers ({__percent(num_missing, len(papers))})")
 
         return num_doi + num_title
 
@@ -358,7 +350,7 @@ class OpenAlexClient:
                         .system(self._nl_to_query_context)
                         .user(f"\nNatural language prompt:\n{nl_query}")
                         .build())
-        logger.info(f"Generating OpenAlex query | prompt: {nl_query}")
+        loggy.info(f"Generating OpenAlex query | prompt: {nl_query}")
         try:
             timer = Timer()
             response = await model_client.prompt_many(conversation,
@@ -367,8 +359,8 @@ class OpenAlexClient:
                                                       temperature=0)
             query = response['query'].replace("'", '"')
             # report success
-            logger.info(f"Generated OpenAlex query in {timer.format_time()}s")
-            logger.debug_msg(f"Generated query: {query}")
+            loggy.info(f"Generated OpenAlex query in {timer.format_time()}s")
+            loggy.debug_info(f"Generated query: {query}")
             return query
         except ExceededRetriesError as e:
             raise ExceedMaxQueryGenerationAttemptsError(model_client.model) from e

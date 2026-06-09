@@ -5,9 +5,9 @@ Description: Get details about a paper printed to stdout
 
 @author Derek Garcia
 """
+import loggy
 
 from db.paper_database import PaperDatabase
-from util.logger import logger
 from util.output import print_ranked_papers
 
 
@@ -21,7 +21,7 @@ def run_inspect(db: PaperDatabase, paper_title: str) -> None:
     paper = db.get_paper(paper_title)
     # exit early if couldn't find paper
     if not paper:
-        logger.warn(f"Could not find paper '{paper_title}'")
+        loggy.warn(f"Could not find paper '{paper_title}'")
         return
 
     # print table

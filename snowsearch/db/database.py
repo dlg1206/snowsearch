@@ -10,12 +10,12 @@ import os
 import time
 from abc import ABC
 
+import loggy
 from neo4j import GraphDatabase
 from neo4j.exceptions import ConstraintError, TransientError
 
 from db import _NODE_SCHEMA
 from db.entity import Node, Relationship, NodeType
-from util.logger import logger
 
 # Mute Neo4j driver logs
 logging.getLogger("neo4j").setLevel(logging.CRITICAL)
@@ -51,7 +51,7 @@ class Neo4jDatabase(ABC):
         :raises RuntimeError: If connection was never established
         :raises ConnectionError: If failed to connect to the Neo4j database
         """
-        logger.debug_msg("Attempting to access database")
+        loggy.debug_info("Attempting to access database")
         if not self._driver:
             raise RuntimeError("Database driver is not initialized")
         # attempt connection
@@ -60,7 +60,7 @@ class Neo4jDatabase(ABC):
                 session.run("RETURN 1")
         except Exception as e:
             raise ConnectionError(e) from e
-        logger.debug_msg("Connected Successfully")
+        loggy.debug_info("Connected Successfully")
 
     def __enter__(self) -> "Neo4jDatabase":
         """
@@ -93,13 +93,13 @@ class Neo4jDatabase(ABC):
         """
         Load constraints from the schema yaml file
         """
-        logger.debug_msg("Initializing database")
+        loggy.debug_info("Initializing database")
         with self._driver.session() as session:
             # enforce for unique keys
             for node_label in _NODE_SCHEMA.keys():
                 # Create the constraint query dynamically
                 session.run(f"CREATE CONSTRAINT IF NOT EXISTS FOR (n:{node_label}) REQUIRE n.match_id IS UNIQUE;")
-        logger.debug_msg("Database initialized")
+        loggy.debug_info("Database initialized")
 
     def has(self, node_type: NodeType, node_id: str) -> bool:
         """

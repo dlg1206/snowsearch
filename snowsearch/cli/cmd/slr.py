@@ -4,17 +4,16 @@ Description: Orchestrate entire strategic literature review pipeline
 
 @author Derek Garcia
 """
+import loggy
+from loggy import Timer
 
 from cli.client_factory import ClientFactory
-
 from cli.cmd.snowball import snowball
 from config.parser import Config
 from db.paper_database import PaperDatabase
 from db.zotero import ZoteroClient
 from rank.abstract_ranker import AbstractRanker
-from util.logger import logger
 from util.output import write_papers_to_json, print_ranked_papers
-from util.timer import Timer
 
 
 async def run_slr(db: PaperDatabase,
@@ -46,12 +45,12 @@ async def run_slr(db: PaperDatabase,
     # init run
     db.load_embedding_model()  # preempt model load
     slt_timer = Timer()
-    logger.info("Beginning automatic strategic literature review")
+    loggy.info("Beginning automatic strategic literature review")
     run_id = db.start_run()
 
     # generate query if none provided
     if oa_query:
-        logger.info(f"Using provided OpenAlex | {oa_query}")
+        loggy.info(f"Using provided OpenAlex | {oa_query}")
         db.insert_openalex_query(run_id, None, nl_query, oa_query)
     else:
         oa_query_model = client_factory.create_query_generation_client()
@@ -62,8 +61,8 @@ async def run_slr(db: PaperDatabase,
     hits = await openalex_client.search_and_save_metadata(run_id, db, oa_query)
     if not hits:
         db.end_run(run_id)
-        logger.warn("Did not find any papers in OpenAlex, exiting early")
-        logger.warn("Try refining your search or manually enter a search query with the '-q' flag")
+        loggy.warn("Did not find any papers in OpenAlex, exiting early")
+        loggy.warn("Try refining your search or manually enter a search query with the '-q' flag")
         return
 
     # perform N rounds of snowballing
@@ -75,11 +74,11 @@ async def run_slr(db: PaperDatabase,
 
     if not seed_papers:
         db.end_run(run_id)
-        logger.warn("Did not find any seed papers for snowballing, exiting early")
+        loggy.warn("Did not find any seed papers for snowballing, exiting early")
         return
 
     timer = Timer()
-    logger.info(f"Starting {config.snowball.rounds} rounds of snowballing")
+    loggy.info(f"Starting {config.snowball.rounds} rounds of snowballing")
     processed_papers, new_citations = await snowball(db, openalex_client, grobid_worker, config.snowball.rounds,
                                                      seed_papers,
                                                      nl_query=nl_query,
@@ -87,15 +86,15 @@ async def run_slr(db: PaperDatabase,
                                                      min_similarity_score=config.snowball.min_similarity_score,
                                                      ignore_quota=ignore_quota)
     # log info
-    logger.info(f"Snowballing complete in {timer.format_time()}s")
-    logger.info(f"Processed {processed_papers} new papers")
-    logger.info(f"Fetched details for {new_citations} new citations")
+    loggy.info(f"Snowballing complete in {timer.format_time()}s")
+    loggy.info(f"Processed {processed_papers} new papers")
+    loggy.info(f"Fetched details for {new_citations} new citations")
 
     # exit early if not ranking
     if skip_paper_ranking:
-        logger.warn("Skipping paper ranking")
+        loggy.warn("Skipping paper ranking")
         db.end_run(run_id)
-        logger.info(f"Completed strategic literature review in {slt_timer.format_time()}s")
+        loggy.info(f"Completed strategic literature review in {slt_timer.format_time()}s")
         return
 
     # after snowballing, get top N papers that best match the prompt and rank them
@@ -106,7 +105,7 @@ async def run_slr(db: PaperDatabase,
 
     if not papers:
         db.end_run(run_id)
-        logger.warn("No papers to rank, exiting early")
+        loggy.warn("No papers to rank, exiting early")
         return
 
     # rank and print output
@@ -116,14 +115,14 @@ async def run_slr(db: PaperDatabase,
     if json_output:
         model = f"{config.ranking.agent_config.model_name}:{config.ranking.agent_config.model_tag}"
         json_output = write_papers_to_json(db, json_output, ranked_papers, model_used=model, nl_query=nl_query)
-        logger.info(f"Results saved to '{json_output}'")
+        loggy.info(f"Results saved to '{json_output}'")
     else:
         # pretty print results
         print_ranked_papers(db, ranked_papers, include_abstract=True, nl_query=nl_query)
 
     # end run
     db.end_run(run_id)
-    logger.info(f"Completed strategic literature review in {slt_timer.format_time()}s")
+    loggy.info(f"Completed strategic literature review in {slt_timer.format_time()}s")
 
     # upload papers if created
     if zotero_client:

@@ -5,11 +5,11 @@ Description: Attempt to Download PDF from file
 
 @author Derek Garcia
 """
+import loggy
 from aiohttp import ClientSession, ClientResponseError
 
 from download.config import DOWNLOAD_HEADERS, KILOBYTE, PDF_MAGIC
 from download.exception import NoFileDataError, InvalidFileFormatError, PaperDownloadError
-from util.logger import logger
 
 
 async def download_pdf(session: ClientSession, title: str, pdf_url: str, output_path: str) -> None:
@@ -26,7 +26,7 @@ async def download_pdf(session: ClientSession, title: str, pdf_url: str, output_
     """
     try:
         async with session.get(pdf_url, headers=DOWNLOAD_HEADERS) as response:
-            logger.debug_msg(f"Downloading '{response.url}'")
+            loggy.debug_info(f"Downloading '{response.url}'")
             response.raise_for_status()
             # download pdf
             first_pass = True

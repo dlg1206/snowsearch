@@ -8,12 +8,12 @@ Description: Use an LLM to rank papers based on a search term
 
 from typing import List
 
+import loggy
 from llumpy import AsyncModelClient
 
 from db.paper_database import PaperDatabase
 from db.zotero import ZoteroClient
 from rank.abstract_ranker import AbstractRanker
-from util.logger import logger
 from util.output import write_papers_to_json, print_ranked_papers
 from util.verify import validate_all_papers_found
 
@@ -44,7 +44,7 @@ async def run_rank(db: PaperDatabase,
     if paper_titles_to_rank:
         papers_to_rank = db.get_papers(paper_titles_to_rank)
         for missing_title in validate_all_papers_found(paper_titles_to_rank, papers_to_rank):
-            logger.warn(f"Could not find paper '{missing_title}' in the database")
+            loggy.warn(f"Could not find paper '{missing_title}' in the database")
     else:
         papers_to_rank = db.search_papers_by_nl_query(nl_query,
                                                       require_abstract=True,
@@ -54,7 +54,7 @@ async def run_rank(db: PaperDatabase,
 
     # error if no papers
     if not papers_to_rank:
-        logger.warn("No papers to rank, exiting early. . .")
+        loggy.warn("No papers to rank, exiting early. . .")
 
     # rank papers
     ranker = AbstractRanker(rank_client, tokens_per_word)
@@ -64,7 +64,7 @@ async def run_rank(db: PaperDatabase,
     if json_output:
         json_output = write_papers_to_json(db, json_output, ranked_papers, model_used=rank_client.model,
                                            nl_query=nl_query)
-        logger.info(f"Results saved to '{json_output}'")
+        loggy.info(f"Results saved to '{json_output}'")
     else:
         # pretty print results
         print_ranked_papers(db, ranked_papers, include_abstract=True, nl_query=nl_query)

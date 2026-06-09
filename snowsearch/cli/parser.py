@@ -7,7 +7,7 @@ Description: CLI command parser
 
 from argparse import ArgumentParser, Namespace
 
-from util.logger import Level, DEFAULT_LOG_LEVEL
+from loggy import Level, DEFAULT_LOG_LEVEL
 
 PROG_NAME = "snowsearch"
 
@@ -315,12 +315,14 @@ def parse_arguments() -> Namespace:
 
     # logging flags
     logging = parser.add_argument_group("Logging")
-    logging.add_argument("-l", "--log-level",
-                         metavar="<log level>",
-                         choices=[Level.INFO.name, Level.WARN.name, Level.ERROR.name, Level.DEBUG.name],
-                         help=f"Set log level (Default: {DEFAULT_LOG_LEVEL.name}) "
-                              f"({[Level.INFO.name, Level.WARN.name, Level.ERROR.name, Level.DEBUG.name]})",
-                         default=DEFAULT_LOG_LEVEL.name)
+    level_choices = [level.name for level in Level]
+    logging.add_argument(
+        "-l", "--log-level",
+        metavar="<log level>",
+        choices=level_choices,
+        help=f"Set log level (Default: {DEFAULT_LOG_LEVEL.name}) ({level_choices})",
+        default=DEFAULT_LOG_LEVEL.name
+    )
     logging.add_argument("-s", "--silent",
                          action="store_true",
                          help="Run in silent mode")

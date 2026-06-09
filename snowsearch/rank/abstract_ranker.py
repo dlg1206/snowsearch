@@ -11,13 +11,13 @@ import contextlib
 import math
 from typing import List, Tuple, Dict
 
+import loggy
 from llumpy import AsyncModelClient, JSONRetryHandler, ConversationBuilder, ExceededRetriesError
+from loggy import Timer
 
 from dto.paper_dto import PaperDTO
 from rank.config import AVG_TOKEN_PER_WORD, RANK_CONTEXT_FILE, MAX_RETRIES
 from rank.exception import ExceedMaxRankingGenerationAttemptsError
-from util.logger import logger
-from util.timer import Timer
 
 
 class AbstractRanker:
@@ -104,16 +104,16 @@ class AbstractRanker:
         # guard against pointless prompting
         match len(papers):
             case 1:
-                logger.warn("Only one abstract provided, skipping ranking")
+                loggy.warn("Only one abstract provided, skipping ranking")
                 return papers
             case 0:
-                logger.error_msg("No abstracts provided, skipping ranking")
+                loggy.error("No abstracts provided, skipping ranking")
                 return papers
 
         # format prompt
         context, prompt = self._format_context_and_prompt(nl_query, papers)
         # rank abstracts
-        logger.info(f"Ranking {len(papers)} abstracts, this may take a while")
+        loggy.info(f"Ranking {len(papers)} abstracts, this may take a while")
         timer = Timer()
 
         async def __heartbeat():
@@ -123,7 +123,7 @@ class AbstractRanker:
             try:
                 while True:
                     await asyncio.sleep(5)
-                    logger.info(f"{timer.format_time()} elapsed")
+                    loggy.info(f"{timer.format_time()} elapsed")
             except asyncio.CancelledError:
                 pass
 
@@ -141,6 +141,6 @@ class AbstractRanker:
             with contextlib.suppress(asyncio.CancelledError):
                 await hb
 
-        logger.info(f"Final ranking determined in {timer.format_time()}s")
+        loggy.info(f"Final ranking determined in {timer.format_time()}s")
         # return results
         return ranked_abstracts
