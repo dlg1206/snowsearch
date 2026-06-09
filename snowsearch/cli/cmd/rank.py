@@ -8,7 +8,8 @@ Description: Use an LLM to rank papers based on a search term
 
 from typing import List
 
-from ai.model import ModelClient
+from llumpy import AsyncModelClient
+
 from db.paper_database import PaperDatabase
 from db.zotero import ZoteroClient
 from rank.abstract_ranker import AbstractRanker
@@ -18,7 +19,7 @@ from util.verify import validate_all_papers_found
 
 
 async def run_rank(db: PaperDatabase,
-                   rank_client: ModelClient,
+                   rank_client: AsyncModelClient,
                    tokens_per_word: float,
                    nl_query: str,
                    paper_limit: int,

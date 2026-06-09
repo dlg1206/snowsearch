@@ -8,15 +8,13 @@ Description: Rank papers based on the relevance of their abstracts
 
 import asyncio
 import contextlib
-import json
 import math
-from json import JSONDecodeError
 from typing import List, Tuple, Dict
 
-from ai.model import ModelClient
+from llumpy import AsyncModelClient, JSONRetryHandler, ConversationBuilder, ExceededRetriesError
+
 from dto.paper_dto import PaperDTO
-from rank.config import AVG_TOKEN_PER_WORD, RANK_CONTEXT_FILE, TOKEN_BUFFER_MODIFIER, \
-    MAX_RETRIES
+from rank.config import AVG_TOKEN_PER_WORD, RANK_CONTEXT_FILE, MAX_RETRIES
 from rank.exception import ExceedMaxRankingGenerationAttemptsError
 from util.logger import logger
 from util.timer import Timer
@@ -27,7 +25,7 @@ class AbstractRanker:
     Ranker that uses an LLM to rank abstracts
     """
 
-    def __init__(self, model_client: ModelClient, tokens_per_word: float = AVG_TOKEN_PER_WORD):
+    def __init__(self, model_client: AsyncModelClient, tokens_per_word: float = AVG_TOKEN_PER_WORD):
         """
         Create new Abstract ranker
 
@@ -40,10 +38,6 @@ class AbstractRanker:
         # load content for one-shot
         with open(RANK_CONTEXT_FILE, 'r', encoding='utf-8') as f:
             self._rank_context = f.read()
-
-        # reserve tokens for one-shot
-        self._context_window_budget = model_client.context_window - math.ceil(
-            self._estimate_tokens(self._rank_context) * TOKEN_BUFFER_MODIFIER)
 
     def _estimate_tokens(self, text: str) -> int:
         """
@@ -82,34 +76,22 @@ class AbstractRanker:
         :return: Ordered list of abstracts based on LLM ranking
         """
         # warn if exceed budget
-        total_tokens = self._estimate_tokens(context) + self._estimate_tokens(prompt)
-        if total_tokens > self._context_window_budget:
-            logger.warn(f"Exceeded context budget by {total_tokens} tokens, ranking may be impacted")
+        # total_tokens = self._estimate_tokens(context) + self._estimate_tokens(prompt)
+        # if total_tokens > self._context_window_budget:
+        #     logger.warn(f"Exceeded context budget by {total_tokens} tokens, ranking may be impacted")
 
-        # error if exceed retries
-        for attempt in range(0, MAX_RETRIES):
-            logger.debug_msg(f"Ranking attempt {attempt + 1}/{MAX_RETRIES}")
-            completion, _ = await self._model_client.prompt(
-                messages=[
-                    {"role": "system", "content": context},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0
-            )
+        conversation = ConversationBuilder().system(context).user(prompt).build()
+        try:
+            results = await self._model_client.prompt_many(conversation,
+                                                           handler=JSONRetryHandler(),
+                                                           retries=MAX_RETRIES,
+                                                           temperature=0)
+            # convert back to dtos in order
+            return [paper_lookup[results[key]] for key in sorted(results.keys(), key=int)]
 
-            # Attempt to extract the ranking from the response.
-            # This is to safeguard against wordy and descriptive replies
-            try:
-                results = json.loads(completion.choices[0].message.content.strip())
-                # convert back to dtos in order
-                return [paper_lookup[results[key]] for key in sorted(results.keys(), key=int)]
-            except JSONDecodeError:
-                # else retry
-                if attempt + 1 < MAX_RETRIES:
-                    logger.warn("Failed to generate ranking, retrying. . .")
-                    continue
-        # error if exceed retries
-        raise ExceedMaxRankingGenerationAttemptsError(self._model_client.model)
+        except ExceededRetriesError as e:
+            # error if exceed retries
+            raise ExceedMaxRankingGenerationAttemptsError(self._model_client.model) from e
 
     async def rank_paper_abstracts(self, nl_query: str, papers: List[PaperDTO]) -> List[PaperDTO]:
         """

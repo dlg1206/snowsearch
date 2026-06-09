@@ -6,17 +6,15 @@ Description: Util factory to streaming the creation of Client interfaces
 @author Derek Garcia
 """
 import os
+from argparse import Namespace
 from dataclasses import asdict
-from multiprocessing.managers import Namespace
 
-from ai.model import ModelClient
-from ai.ollama import OllamaClient
-from ai.openai import OpenAIClient, OPENAI_API_KEY_ENV, InvalidAPIKeyError
+from llumpy import AsyncModelClient, AsyncOllamaClient, AsyncOpenAIClient
+
 from config.parser import Config, AgentConfigDTO
 from db.zotero import LibraryType, ZoteroClient
 from grobid.worker import GrobidWorker
 from openalex.client import OpenAlexClient
-from util.logger import logger
 
 
 class ClientFactory:
@@ -49,13 +47,13 @@ class ClientFactory:
             self._config.grobid.client_params
         )
 
-    def create_query_generation_client(self) -> ModelClient:
+    def create_query_generation_client(self) -> AsyncModelClient:
         """
         :return: Model Client for query generation
         """
         return _create_model_client(self._config.query_generation)
 
-    def create_rank_client(self) -> ModelClient:
+    def create_rank_client(self) -> AsyncModelClient:
         """
         :return: Model Client for ranking papers
         """
@@ -81,19 +79,13 @@ class ClientFactory:
         return None
 
 
-def _create_model_client(agent_config: AgentConfigDTO) -> ModelClient:
+def _create_model_client(agent_config: AgentConfigDTO) -> AsyncModelClient:
     """
     Create a model client using the provided agent config
-    Will return OpenAI if OPENAI_API_KEY env var is set and Ollama if OpenAI fails or key is not present
+    Will return OpenAI if OPENAI_API_KEY env var is set, else Ollama
 
     :param agent_config: Agent config to use to make the client
     :return: Model Client
     """
-    if os.getenv(OPENAI_API_KEY_ENV):
-        try:
-            return OpenAIClient(agent_config.model_name, agent_config.context_window)
-        except InvalidAPIKeyError as e:
-            logger.error_exp(e)
-            logger.warn("Failed to verify OpenAI key, using Ollama as fallback", e)
-
-    return OllamaClient(**asdict(agent_config))
+    return AsyncOpenAIClient(agent_config.model_name) if os.getenv('OPENAI_API_KEY') else AsyncOllamaClient(
+        **asdict(agent_config))

@@ -9,15 +9,17 @@ https://docs.openalex.org/api-guide-for-llms
 
 import asyncio
 import hashlib
+import json
 import os
 from asyncio import Semaphore
+from json import JSONDecodeError
 from typing import List, Dict, Tuple, Any
 
 from aiohttp import ClientSession
+from llumpy import AsyncModelClient, ConversationBuilder, JSONRetryHandler, ExceededRetriesError
 from tqdm.std import tqdm as TQDM
 from yarl import URL
 
-from ai.model import ModelClient
 from db.config import DOI_PREFIX
 from db.paper_database import PaperDatabase
 from dto.paper_dto import PaperDTO
@@ -25,6 +27,24 @@ from openalex.config import POLITE_RATE_LIMIT_SLEEP, DEFAULT_RATE_LIMIT_SLEEP, M
     QUERY_JSON_RE, MAX_RETRIES, NL_TO_QUERY_CONTEXT_FILE, MAX_DOI_PER_PAGE
 from openalex.exception import MissingOpenAlexEntryError, ExceedMaxQueryGenerationAttemptsError
 from util.logger import logger
+from util.timer import Timer
+
+
+class _QueryJSONRetryHandler(JSONRetryHandler):
+    """Handler for parsing JSON from LLM responses"""
+
+    def _format(self, response: str) -> Dict[str, Any]:
+        """
+        Validate the response contains a valid JSON object
+
+        :param response: Response text to validate contains JSON
+        :raises JSONDecodeError: If failed to parse JSON from text
+        :return: JSON object
+        """
+        match = QUERY_JSON_RE.search(response.strip())
+        if not match:
+            raise JSONDecodeError("Text contains no JSON", response, 0)
+        return json.loads(match.group())
 
 
 class OpenAlexClient:
@@ -321,7 +341,7 @@ class OpenAlexClient:
 
         return num_doi + num_title
 
-    async def generate_openalex_query(self, model_client: ModelClient, nl_query: str) -> str:
+    async def generate_openalex_query(self, model_client: AsyncModelClient, nl_query: str) -> str:
         """
         Use an LLM to convert a natural language search query
         to an OpenAlex style search query based on Elasticsearch query
@@ -333,32 +353,25 @@ class OpenAlexClient:
         :raises ExceedMaxQueryGenerationAttemptsError: If fail to extract query from model reply
         :return: OpenAlex query string
         """
-        nl_query = nl_query.replace("'", '"')
-        # error if exceed retries
-        for attempt in range(0, MAX_RETRIES):
-            logger.info(f"Generating OpenAlex query ({attempt + 1}/{MAX_RETRIES}) | prompt: {nl_query.strip()}")
-            completion, timer = await model_client.prompt(
-                messages=[
-                    {"role": "system", "content": self._nl_to_query_context},
-                    {"role": "user", "content": f"\nNatural language prompt:\n{nl_query.strip()}"}
-                ],
-                temperature=0
-            )
-
-            # Attempt to extract the query from the response.
-            # This is to safeguard against wordy and descriptive replies
-            query_match = QUERY_JSON_RE.findall(completion.choices[0].message.content.strip())
-            if query_match:
-                query = query_match[0].strip().replace("'", '"')
-                # report success
-                logger.info(f"Generated OpenAlex query in {timer.format_time()}s")
-                logger.debug_msg(f"Generated query: {query}")
-                return query
-            # else retry
-            if attempt + 1 < MAX_RETRIES:
-                logger.warn("Failed to generate OpenAlex query, retrying. . .")
-        # error if exceed retries
-        raise ExceedMaxQueryGenerationAttemptsError(model_client.model)
+        nl_query = nl_query.replace("'", '"').strip()
+        conversation = (ConversationBuilder()
+                        .system(self._nl_to_query_context)
+                        .user(f"\nNatural language prompt:\n{nl_query}")
+                        .build())
+        logger.info(f"Generating OpenAlex query | prompt: {nl_query}")
+        try:
+            timer = Timer()
+            response = await model_client.prompt_many(conversation,
+                                                      handler=_QueryJSONRetryHandler(),
+                                                      retries=MAX_RETRIES,
+                                                      temperature=0)
+            query = response['query'].replace("'", '"')
+            # report success
+            logger.info(f"Generated OpenAlex query in {timer.format_time()}s")
+            logger.debug_msg(f"Generated query: {query}")
+            return query
+        except ExceededRetriesError as e:
+            raise ExceedMaxQueryGenerationAttemptsError(model_client.model) from e
 
 
 async def _fetch_doi_batch_wrapper(semaphore: Semaphore, callback) -> Tuple[List[PaperDTO], List[str]]:
