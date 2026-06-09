@@ -12,8 +12,9 @@ WORKDIR /snowsearch
 COPY requirements.txt .
 RUN pip install --prefer-binary --no-cache -r requirements.txt
 # create user
-RUN useradd -m snowsearch
-USER snowsearch
+# RUN useradd -m snowsearch
+# todo - re-add user with correct params
+# USER snowsearch
 # cache embedding model
 RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('$EMBEDDING_MODEL')"
 # copy code
